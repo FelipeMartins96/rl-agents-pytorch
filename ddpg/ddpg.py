@@ -56,7 +56,6 @@ def data_func(
             s = env.reset()
             noise.reset()
             noise.sigma = sigma_m.value
-            print(noise.sigma)
             while not done:
                 # Step the environment
                 s_v = torch.Tensor(s).to(device)
