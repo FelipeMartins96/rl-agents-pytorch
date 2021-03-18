@@ -2,6 +2,7 @@ import argparse
 import os
 import copy
 import datetime
+import dataclasses
 import time
 
 import gym
@@ -15,6 +16,7 @@ from tensorboardX import SummaryWriter
 from ddpg import *
 from networks import *
 from experience import *
+
 
 def get_env_specs(env_name):
     env = gym.make(env_name)
@@ -36,7 +38,8 @@ if __name__ == "__main__":
     hp = HyperParameters(
         EXP_NAME=args.name,
         ENV_NAME='Pendulum-v0',
-        N_ROLLOUT_PROCESSES=1,
+        AGENT="ddpg_async",
+        N_ROLLOUT_PROCESSES=2,
         LEARNING_RATE=0.0001,
         REPLAY_SIZE=100000,
         REPLAY_INITIAL=10000,
@@ -51,12 +54,11 @@ if __name__ == "__main__":
         NOISE_SIGMA_GRAD_STEPS=1000
     )
 
-
-    path = os.path.join("saves", "ddpg", hp.EXP_NAME)
+    path = os.path.join("saves", "ddpg_async", hp.EXP_NAME)
     checkpoint_path = os.path.join(path, "Checkpoints")
     current_time = datetime.datetime.now().strftime('%m-%d_%H-%M-%S')
-    tb_path = os.path.join('runs', 
-                           hp.ENV_NAME + '_' + current_time + '-' + hp.EXP_NAME)
+    tb_path = os.path.join('runs',
+                           hp.ENV_NAME + '_' + hp.EXP_NAME + '_' + current_time)
     os.makedirs(checkpoint_path, exist_ok=True)
 
     hp.N_OBS, hp.N_ACTS = get_env_specs(hp.ENV_NAME)
@@ -78,11 +80,8 @@ if __name__ == "__main__":
                 device,
                 exp_queue,
                 finish_event,
-                hp.ENV_NAME,
-                hp.GAMMA,
-                hp.REWARD_STEPS,
                 noise_sigma_m,
-                hp.NOISE_THETA
+                hp
             )
         )
         data_proc.start()
@@ -99,6 +98,12 @@ if __name__ == "__main__":
     n_samples = 0
     n_episodes = 0
     best_reward = None
+    
+    # Record experiment parameters
+    writer.add_text(
+        tag="HyperParameters",
+        text_string=str(hp).replace(',',"  \n"),
+    )
 
     try:
         while True:
@@ -146,7 +151,8 @@ if __name__ == "__main__":
             Q_next_v = tgt_Q(S_next_v, A_next_v)  # Bootstrap Q_next
             Q_next_v[dones] = 0.0  # No bootstrap if transition is terminal
             # Calculate a reference Q value using the bootstrap Q
-            Q_ref_v = r_v.unsqueeze(dim=-1) + Q_next_v * (hp.GAMMA**hp.REWARD_STEPS)
+            Q_ref_v = r_v.unsqueeze(dim=-1) + Q_next_v * \
+                (hp.GAMMA**hp.REWARD_STEPS)
             Q_loss_v = F.mse_loss(Q_v, Q_ref_v.detach())
             Q_loss_v.backward()
             Q_opt.step()
@@ -170,7 +176,7 @@ if __name__ == "__main__":
             metrics['speed/samples'] = new_samples/(sample_time - st_time)
             metrics['speed/grad'] = 1/(grad_time - sample_time)
             metrics['speed/total'] = 1/(grad_time - st_time)
-            
+
             # Log metrics
             for key, value in metrics.items():
                 writer.add_scalar(
@@ -178,7 +184,7 @@ if __name__ == "__main__":
                     scalar_value=value,
                     global_step=n_grads
                 )
-            
+
             if n_grads % hp.NOISE_SIGMA_GRAD_STEPS == 0:
                 # This syntax is needed to be process-safe
                 # The noise sigma value is accessed by the playing processes

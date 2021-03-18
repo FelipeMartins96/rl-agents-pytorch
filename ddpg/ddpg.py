@@ -8,26 +8,29 @@ from noise import *
 import os
 from dataclasses import dataclass
 
+
 @dataclass
 class HyperParameters:
     """Class containing all experiment hyperparameters"""
     EXP_NAME: str
     ENV_NAME: str
+    AGENT: str
     N_ROLLOUT_PROCESSES: int
     LEARNING_RATE: float
-    REPLAY_SIZE: int # Maximum Replay Buffer Sizer
-    REPLAY_INITIAL: int # Minimum experience buffer size to start training
+    REPLAY_SIZE: int  # Maximum Replay Buffer Sizer
+    REPLAY_INITIAL: int  # Minimum experience buffer size to start training
     EXP_GRAD_RATIO: int  # Number of collected experiences for every grad step
     SAVE_FREQUENCY: int  # Save checkpoint every _ grad_steps
     BATCH_SIZE: int
-    GAMMA: float # Reward Decay
+    GAMMA: float  # Reward Decay
     REWARD_STEPS: float  # For N-Steps Tracing
-    NOISE_SIGMA_INITIAL: float # Initial action noise sigma
+    NOISE_SIGMA_INITIAL: float  # Initial action noise sigma
     NOISE_THETA: float
     NOISE_SIGMA_DECAY: float  # Action noise sigma decay
     NOISE_SIGMA_GRAD_STEPS: int  # Decay action noise every _ grad steps
     N_OBS: int = 0
     N_ACTS: int = 0
+
 
 def unpack_batch_ddpg(
     batch,
@@ -57,21 +60,18 @@ def data_func(
     device,
     queue_m,
     finish_event_m,
-    env_name,
-    gamma,
-    reward_steps,
     sigma_m,
-    theta
+    hp
 ):
-    env = gym.make(env_name)
-    tracer = NStepTracer(n=reward_steps, gamma=gamma)
+    env = gym.make(hp.ENV_NAME)
+    tracer = NStepTracer(n=hp.REWARD_STEPS, gamma=hp.GAMMA)
     noise = OrnsteinUhlenbeckNoise(
-        sigma=sigma_m.value, 
-        theta=theta, 
+        sigma=sigma_m.value,
+        theta=hp.NOISE_THETA,
         min_value=env.action_space.low,
         max_value=env.action_space.high
     )
-    
+
     with torch.no_grad():
         while not finish_event_m.is_set():
             done = False
@@ -90,12 +90,12 @@ def data_func(
                 s_next, r, done, info = env.step(a)
                 ep_steps += 1
                 ep_rw += r
-                
+
                 # Trace NStep rewards and add to mp queue
                 tracer.add(s, a, r, done)
                 while tracer:
                     queue_m.put(tracer.pop())
-                    
+
                 if done:
                     info['fps'] = ep_steps / (time.perf_counter() - st_time)
                     info['noise'] = noise.sigma
