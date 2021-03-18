@@ -6,7 +6,28 @@ import numpy as np
 from experience import *
 from noise import *
 import os
+from dataclasses import dataclass
 
+@dataclass
+class HyperParameters:
+    """Class containing all experiment hyperparameters"""
+    EXP_NAME: str
+    ENV_NAME: str
+    N_ROLLOUT_PROCESSES: int
+    LEARNING_RATE: float
+    REPLAY_SIZE: int # Maximum Replay Buffer Sizer
+    REPLAY_INITIAL: int # Minimum experience buffer size to start training
+    EXP_GRAD_RATIO: int  # Number of collected experiences for every grad step
+    SAVE_FREQUENCY: int  # Save checkpoint every _ grad_steps
+    BATCH_SIZE: int
+    GAMMA: float # Reward Decay
+    REWARD_STEPS: float  # For N-Steps Tracing
+    NOISE_SIGMA_INITIAL: float # Initial action noise sigma
+    NOISE_THETA: float
+    NOISE_SIGMA_DECAY: float  # Action noise sigma decay
+    NOISE_SIGMA_GRAD_STEPS: int  # Decay action noise every _ grad steps
+    N_OBS: int = 0
+    N_ACTS: int = 0
 
 def unpack_batch_ddpg(
     batch,
