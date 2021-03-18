@@ -9,6 +9,7 @@ def unpack_batch_ddpg(
     batch,
     device="cpu"
 ):
+    '''From a batch of experience, return values in Tensor form on device'''
     states, actions, rewards, dones, last_states = [], [], [], [], []
     for exp in batch:
         states.append(exp.state)
@@ -28,7 +29,7 @@ def unpack_batch_ddpg(
 
 
 def data_func(
-    act_net,
+    pi,
     device,
     queue,
     finish_event,
@@ -48,7 +49,7 @@ def data_func(
             while not done:
                 # Step the environment
                 s_v = torch.Tensor(s).to(device)
-                a_v = act_net(s_v)
+                a_v = pi(s_v)
                 a = a_v.cpu().numpy()
                 a = np.clip(a, -1, 1)
                 s_next, r, done, info = env.step(a)

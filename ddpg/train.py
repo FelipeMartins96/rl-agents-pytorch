@@ -46,21 +46,21 @@ if __name__ == "__main__":
 
     n_obs, n_acts = get_env_specs(ENV)
 
-    act_net = DDPGActor(n_obs, n_acts).to(device)
-    crt_net = DDPGCritic(n_obs, n_acts).to(device)
+    pi = DDPGActor(n_obs, n_acts).to(device)
+    Q = DDPGCritic(n_obs, n_acts).to(device)
 
     # Playing
-    act_net.share_memory()
-    train_queue = mp.Queue(maxsize=BATCH_SIZE)
+    pi.share_memory()
+    exp_queue = mp.Queue(maxsize=BATCH_SIZE)
     finish_event = mp.Event()
     data_proc_list = []
     for _ in range(PROCESSES_COUNT):
         data_proc = mp.Process(
             target=data_func,
             args=(
-                act_net,
+                pi,
                 device,
-                train_queue,
+                exp_queue,
                 finish_event,
                 ENV,
                 GAMMA,
@@ -72,10 +72,10 @@ if __name__ == "__main__":
 
     # Training
     writer = SummaryWriter(save_path)
-    tgt_act_net = TargetActor(act_net)
-    tgt_crt_net = TargetCritic(crt_net)
-    act_opt = optim.Adam(act_net.parameters(), lr=LEARNING_RATE)
-    crt_opt = optim.Adam(crt_net.parameters(), lr=LEARNING_RATE)
+    tgt_pi = TargetActor(pi)
+    tgt_Q = TargetCritic(Q)
+    pi_opt = optim.Adam(pi.parameters(), lr=LEARNING_RATE)
+    Q_opt = optim.Adam(Q.parameters(), lr=LEARNING_RATE)
     buffer = ExperienceReplayBuffer(buffer_size=REPLAY_SIZE)
     n_grads = 0
     n_samples = 0
@@ -84,11 +84,11 @@ if __name__ == "__main__":
     try:
         while True:
             for i in range(STEP_GRAD_RATIO):
-                exp = train_queue.get()
+                exp = exp_queue.get()
+                if exp is None:
+                    raise Exception #got None value in queue
                 safe_exp = copy.deepcopy(exp)
                 del(exp)
-                if safe_exp is None:
-                    raise Exception
                 buffer.add(safe_exp)
                 n_samples += 1
 
@@ -96,36 +96,29 @@ if __name__ == "__main__":
                 continue
 
             batch = buffer.sample(BATCH_SIZE)
-            states_v, actions_v, rewards_v, \
-                dones_mask, last_states_v = \
-                unpack_batch_ddpg(batch, device)
+            S_v, A_v, r_v, dones, S_next_v = unpack_batch_ddpg(batch, device)
 
             # train critic
-            crt_opt.zero_grad()
-            q_v = crt_net(states_v, actions_v)
-            last_act_v = tgt_act_net.target_model(
-                last_states_v)
-            q_last_v = tgt_crt_net.target_model(
-                last_states_v, last_act_v)
-            q_last_v[dones_mask] = 0.0
-            q_ref_v = rewards_v.unsqueeze(dim=-1) + \
-                q_last_v * (GAMMA**REWARD_STEPS)
-            critic_loss_v = F.mse_loss(
-                q_v, q_ref_v.detach())
+            Q_opt.zero_grad()
+            Q_v = Q(S_v, A_v)
+            A_next_v = tgt_pi(S_next_v)
+            Q_next_v = tgt_Q(S_next_v, A_next_v)
+            Q_next_v[dones] = 0.0
+            q_ref_v = r_v.unsqueeze(dim=-1) + Q_next_v * (GAMMA**REWARD_STEPS)
+            critic_loss_v = F.mse_loss(Q_v, q_ref_v.detach())
             critic_loss_v.backward()
-            crt_opt.step()
+            Q_opt.step()
 
             # train actor
-            act_opt.zero_grad()
-            cur_actions_v = act_net(states_v)
-            actor_loss_v = -crt_net(
-                states_v, cur_actions_v)
+            pi_opt.zero_grad()
+            A_cur_v = pi(S_v)
+            actor_loss_v = -Q(S_v, A_cur_v)
             actor_loss_v = actor_loss_v.mean()
             actor_loss_v.backward()
-            act_opt.step()
+            pi_opt.step()
 
-            tgt_act_net.sync(alpha=1 - 1e-3)
-            tgt_crt_net.sync(alpha=1 - 1e-3)
+            tgt_pi.sync(alpha=1 - 1e-3)
+            tgt_Q.sync(alpha=1 - 1e-3)
 
             n_grads += 1
 
@@ -134,9 +127,9 @@ if __name__ == "__main__":
         finish_event.set()
 
     finally:
-        if train_queue:
-            while train_queue.qsize() > 0:
-                train_queue.get()
+        if exp_queue:
+            while exp_queue.qsize() > 0:
+                exp_queue.get()
 
         print('queue is empty')
 
@@ -145,5 +138,5 @@ if __name__ == "__main__":
             p.terminate()
             p.join()
 
-        del(train_queue)
-        del(act_net)
+        del(exp_queue)
+        del(pi)
