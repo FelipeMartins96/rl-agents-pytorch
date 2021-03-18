@@ -14,16 +14,16 @@ from ddpg import *
 from networks import *
 from experience import *
 
-ENV = 'SSLGoToBall-v0'
-PROCESSES_COUNT = 1
+ENV = 'Pendulum-v0'
+ROLLOUT_PROCESSES_COUNT = 1
 LEARNING_RATE = 0.0001
-REPLAY_SIZE = 1500000
-REPLAY_INITIAL = 256
+REPLAY_SIZE = 1500000 # Maximum Replay Buffer Sizer
+REPLAY_INITIAL = 10000 # Minimum experience buffer size to start training
 BATCH_SIZE = 256
-GAMMA = 0.95
-REWARD_STEPS = 2
-SAVE_FREQUENCY = 40000
-STEP_GRAD_RATIO = 10
+GAMMA = 0.95 # Reward Decay
+REWARD_STEPS = 2 # For N-Steps Tracing
+SAVE_FREQUENCY = 1000 # Save checkpoint every _ grad_steps
+EXP_GRAD_RATIO = 5 # Number of collected experiences for every grad step
 
 
 def get_env_specs(env_name):
@@ -41,26 +41,28 @@ if __name__ == "__main__":
                         help="Name of the run")
     args = parser.parse_args()
     device = "cuda" if args.cuda else "cpu"
-    save_path = os.path.join("runs", "ddpg", args.name)
-    os.makedirs(save_path, exist_ok=True)
+    
+    path = os.path.join("saves", "ddpg", args.name)
+    checkpoint_path = os.path.join(path, "Checkpoints")
+    os.makedirs(checkpoint_path, exist_ok=True)
 
     n_obs, n_acts = get_env_specs(ENV)
 
-    act_net = DDPGActor(n_obs, n_acts).to(device)
-    crt_net = DDPGCritic(n_obs, n_acts).to(device)
+    pi = DDPGActor(n_obs, n_acts).to(device)
+    Q = DDPGCritic(n_obs, n_acts).to(device)
 
     # Playing
-    act_net.share_memory()
-    train_queue = mp.Queue(maxsize=BATCH_SIZE)
+    pi.share_memory()
+    exp_queue = mp.Queue(maxsize=BATCH_SIZE)
     finish_event = mp.Event()
     data_proc_list = []
-    for _ in range(PROCESSES_COUNT):
+    for _ in range(ROLLOUT_PROCESSES_COUNT):
         data_proc = mp.Process(
             target=data_func,
             args=(
-                act_net,
+                pi,
                 device,
-                train_queue,
+                exp_queue,
                 finish_event,
                 ENV,
                 GAMMA,
@@ -71,11 +73,11 @@ if __name__ == "__main__":
         data_proc_list.append(data_proc)
 
     # Training
-    writer = SummaryWriter(save_path)
-    tgt_act_net = TargetActor(act_net)
-    tgt_crt_net = TargetCritic(crt_net)
-    act_opt = optim.Adam(act_net.parameters(), lr=LEARNING_RATE)
-    crt_opt = optim.Adam(crt_net.parameters(), lr=LEARNING_RATE)
+    writer = SummaryWriter()
+    tgt_pi = TargetActor(pi)
+    tgt_Q = TargetCritic(Q)
+    pi_opt = optim.Adam(pi.parameters(), lr=LEARNING_RATE)
+    Q_opt = optim.Adam(Q.parameters(), lr=LEARNING_RATE)
     buffer = ExperienceReplayBuffer(buffer_size=REPLAY_SIZE)
     n_grads = 0
     n_samples = 0
@@ -83,12 +85,12 @@ if __name__ == "__main__":
 
     try:
         while True:
-            for i in range(STEP_GRAD_RATIO):
-                exp = train_queue.get()
+            for i in range(EXP_GRAD_RATIO):
+                exp = exp_queue.get()
+                if exp is None:
+                    raise Exception #got None value in queue
                 safe_exp = copy.deepcopy(exp)
                 del(exp)
-                if safe_exp is None:
-                    raise Exception
                 buffer.add(safe_exp)
                 n_samples += 1
 
@@ -96,47 +98,56 @@ if __name__ == "__main__":
                 continue
 
             batch = buffer.sample(BATCH_SIZE)
-            states_v, actions_v, rewards_v, \
-                dones_mask, last_states_v = \
-                unpack_batch_ddpg(batch, device)
+            S_v, A_v, r_v, dones, S_next_v = unpack_batch_ddpg(batch, device)
 
             # train critic
-            crt_opt.zero_grad()
-            q_v = crt_net(states_v, actions_v)
-            last_act_v = tgt_act_net.target_model(
-                last_states_v)
-            q_last_v = tgt_crt_net.target_model(
-                last_states_v, last_act_v)
-            q_last_v[dones_mask] = 0.0
-            q_ref_v = rewards_v.unsqueeze(dim=-1) + \
-                q_last_v * (GAMMA**REWARD_STEPS)
-            critic_loss_v = F.mse_loss(
-                q_v, q_ref_v.detach())
+            Q_opt.zero_grad()
+            Q_v = Q(S_v, A_v)
+            A_next_v = tgt_pi(S_next_v)
+            Q_next_v = tgt_Q(S_next_v, A_next_v)
+            Q_next_v[dones] = 0.0
+            q_ref_v = r_v.unsqueeze(dim=-1) + Q_next_v * (GAMMA**REWARD_STEPS)
+            critic_loss_v = F.mse_loss(Q_v, q_ref_v.detach())
             critic_loss_v.backward()
-            crt_opt.step()
+            Q_opt.step()
 
             # train actor
-            act_opt.zero_grad()
-            cur_actions_v = act_net(states_v)
-            actor_loss_v = -crt_net(
-                states_v, cur_actions_v)
+            pi_opt.zero_grad()
+            A_cur_v = pi(S_v)
+            actor_loss_v = -Q(S_v, A_cur_v)
             actor_loss_v = actor_loss_v.mean()
             actor_loss_v.backward()
-            act_opt.step()
+            pi_opt.step()
 
-            tgt_act_net.sync(alpha=1 - 1e-3)
-            tgt_crt_net.sync(alpha=1 - 1e-3)
+            tgt_pi.sync(alpha=1 - 1e-3)
+            tgt_Q.sync(alpha=1 - 1e-3)
 
             n_grads += 1
+            
+            if n_grads % SAVE_FREQUENCY == 0:
+                print("actor_loss = {}, critic_loss = {}".format(critic_loss_v, actor_loss_v))
+                save_checkpoint(
+                    experiment=args.name,
+                    agent="ddpg_async",
+                    pi=pi,
+                    Q=Q,
+                    pi_opt=pi_opt,
+                    Q_opt=Q_opt,
+                    noise_sigma=0,
+                    n_samples=n_samples,
+                    n_grads=n_grads,
+                    device=device,
+                    checkpoint_path=checkpoint_path
+                )
 
     except KeyboardInterrupt:
         print("...Finishing...")
         finish_event.set()
 
     finally:
-        if train_queue:
-            while train_queue.qsize() > 0:
-                train_queue.get()
+        if exp_queue:
+            while exp_queue.qsize() > 0:
+                exp_queue.get()
 
         print('queue is empty')
 
@@ -145,5 +156,5 @@ if __name__ == "__main__":
             p.terminate()
             p.join()
 
-        del(train_queue)
-        del(act_net)
+        del(exp_queue)
+        del(pi)
