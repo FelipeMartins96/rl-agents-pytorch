@@ -18,12 +18,16 @@ ENV = 'Pendulum-v0'
 ROLLOUT_PROCESSES_COUNT = 1
 LEARNING_RATE = 0.0001
 REPLAY_SIZE = 1500000 # Maximum Replay Buffer Sizer
-REPLAY_INITIAL = 10000 # Minimum experience buffer size to start training
+REPLAY_INITIAL = 256 # Minimum experience buffer size to start training
 BATCH_SIZE = 256
 GAMMA = 0.95 # Reward Decay
 REWARD_STEPS = 2 # For N-Steps Tracing
 SAVE_FREQUENCY = 1000 # Save checkpoint every _ grad_steps
 EXP_GRAD_RATIO = 5 # Number of collected experiences for every grad step
+NOISE_SIGMA_INITIAL = 1.0 # Initial action noise sigma
+NOISE_SIGMA_DECAY = 0.999 # Action noise sigma decay 
+NOISE_SIGMA_GRAD_STEPS = 1000 # Decay action noise every _ grad steps
+NOISE_THETA = 0.15
 
 
 def get_env_specs(env_name):
@@ -55,6 +59,7 @@ if __name__ == "__main__":
     pi.share_memory()
     exp_queue = mp.Queue(maxsize=BATCH_SIZE)
     finish_event = mp.Event()
+    noise_sigma_m = mp.Value('f', NOISE_SIGMA_INITIAL)
     data_proc_list = []
     for _ in range(ROLLOUT_PROCESSES_COUNT):
         data_proc = mp.Process(
@@ -66,7 +71,9 @@ if __name__ == "__main__":
                 finish_event,
                 ENV,
                 GAMMA,
-                REWARD_STEPS
+                REWARD_STEPS,
+                noise_sigma_m,
+                NOISE_THETA
             )
         )
         data_proc.start()
@@ -123,6 +130,11 @@ if __name__ == "__main__":
             tgt_Q.sync(alpha=1 - 1e-3)
 
             n_grads += 1
+            if n_grads % NOISE_SIGMA_GRAD_STEPS == 0:
+                # This syntax is needed to be process-safe
+                # The noise sigma value is accessed by the playing processes
+                with noise_sigma_m.get_lock():
+                    noise_sigma_m.value *= NOISE_SIGMA_DECAY
             
             if n_grads % SAVE_FREQUENCY == 0:
                 print("actor_loss = {}, critic_loss = {}".format(critic_loss_v, actor_loss_v))
