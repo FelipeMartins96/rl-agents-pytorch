@@ -3,6 +3,7 @@ import collections
 import gym
 import numpy as np
 from experience import *
+from noise import *
 import os
 
 
@@ -32,36 +33,46 @@ def unpack_batch_ddpg(
 def data_func(
     pi,
     device,
-    queue,
-    finish_event,
+    queue_m,
+    finish_event_m,
     env_name,
     gamma,
-    reward_steps
+    reward_steps,
+    sigma_m,
+    theta
 ):
-
     env = gym.make(env_name)
     tracer = NStepTracer(n=reward_steps, gamma=gamma)
-
+    noise = OrnsteinUhlenbeckNoise(
+        sigma=sigma_m.value, 
+        theta=theta, 
+        min_value=env.action_space.low,
+        max_value=env.action_space.high
+    )
+    
     with torch.no_grad():
-        while not finish_event.is_set():
+        while not finish_event_m.is_set():
             done = False
             s = env.reset()
-
+            noise.reset()
+            noise.sigma = sigma_m.value
+            print(noise.sigma)
             while not done:
                 # Step the environment
                 s_v = torch.Tensor(s).to(device)
                 a_v = pi(s_v)
                 a = a_v.cpu().numpy()
-                a = np.clip(a, -1, 1)
+                a = noise(a)
                 s_next, r, done, info = env.step(a)
                 env.render()
                 # Trace NStep rewards and add to mp queue
                 tracer.add(s, a, r, done)
                 while tracer:
-                    queue.put(tracer.pop())
+                    queue_m.put(tracer.pop())
 
                 # Set state for next step
                 s = s_next
+
 
 def save_checkpoint(
     experiment: str,
@@ -87,5 +98,6 @@ def save_checkpoint(
         "n_grads": n_grads,
         "device": device
     }
-    filename = os.path.join(checkpoint_path, "checkpoint_{:09}.pth".format(n_grads))
+    filename = os.path.join(
+        checkpoint_path, "checkpoint_{:09}.pth".format(n_grads))
     torch.save(checkpoint, filename)
