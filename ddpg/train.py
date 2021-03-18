@@ -14,16 +14,16 @@ from ddpg import *
 from networks import *
 from experience import *
 
-ENV = 'SSLGoToBall-v0'
-PROCESSES_COUNT = 1
+ENV = 'Pendulum-v0'
+ROLLOUT_PROCESSES_COUNT = 1
 LEARNING_RATE = 0.0001
-REPLAY_SIZE = 1500000
-REPLAY_INITIAL = 256
+REPLAY_SIZE = 1500000 # Maximum Replay Buffer Sizer
+REPLAY_INITIAL = 10000 # Minimum experience buffer size to start training
 BATCH_SIZE = 256
-GAMMA = 0.95
-REWARD_STEPS = 2
-SAVE_FREQUENCY = 40000
-STEP_GRAD_RATIO = 10
+GAMMA = 0.95 # Reward Decay
+REWARD_STEPS = 2 # For N-Steps Tracing
+SAVE_FREQUENCY = 1000 # Save checkpoint every _ grad_steps
+EXP_GRAD_RATIO = 5 # Number of collected experiences for every grad step
 
 
 def get_env_specs(env_name):
@@ -41,8 +41,10 @@ if __name__ == "__main__":
                         help="Name of the run")
     args = parser.parse_args()
     device = "cuda" if args.cuda else "cpu"
-    save_path = os.path.join("runs", "ddpg", args.name)
-    os.makedirs(save_path, exist_ok=True)
+    
+    path = os.path.join("saves", "ddpg", args.name)
+    checkpoint_path = os.path.join(path, "Checkpoints")
+    os.makedirs(checkpoint_path, exist_ok=True)
 
     n_obs, n_acts = get_env_specs(ENV)
 
@@ -54,7 +56,7 @@ if __name__ == "__main__":
     exp_queue = mp.Queue(maxsize=BATCH_SIZE)
     finish_event = mp.Event()
     data_proc_list = []
-    for _ in range(PROCESSES_COUNT):
+    for _ in range(ROLLOUT_PROCESSES_COUNT):
         data_proc = mp.Process(
             target=data_func,
             args=(
@@ -71,7 +73,7 @@ if __name__ == "__main__":
         data_proc_list.append(data_proc)
 
     # Training
-    writer = SummaryWriter(save_path)
+    writer = SummaryWriter()
     tgt_pi = TargetActor(pi)
     tgt_Q = TargetCritic(Q)
     pi_opt = optim.Adam(pi.parameters(), lr=LEARNING_RATE)
@@ -83,7 +85,7 @@ if __name__ == "__main__":
 
     try:
         while True:
-            for i in range(STEP_GRAD_RATIO):
+            for i in range(EXP_GRAD_RATIO):
                 exp = exp_queue.get()
                 if exp is None:
                     raise Exception #got None value in queue
@@ -121,6 +123,22 @@ if __name__ == "__main__":
             tgt_Q.sync(alpha=1 - 1e-3)
 
             n_grads += 1
+            
+            if n_grads % SAVE_FREQUENCY == 0:
+                print("actor_loss = {}, critic_loss = {}".format(critic_loss_v, actor_loss_v))
+                save_checkpoint(
+                    experiment=args.name,
+                    agent="ddpg_async",
+                    pi=pi,
+                    Q=Q,
+                    pi_opt=pi_opt,
+                    Q_opt=Q_opt,
+                    noise_sigma=0,
+                    n_samples=n_samples,
+                    n_grads=n_grads,
+                    device=device,
+                    checkpoint_path=checkpoint_path
+                )
 
     except KeyboardInterrupt:
         print("...Finishing...")
