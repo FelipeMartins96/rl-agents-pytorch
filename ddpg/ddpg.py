@@ -1,5 +1,6 @@
 import torch
 import collections
+import time
 import gym
 import numpy as np
 from experience import *
@@ -56,6 +57,9 @@ def data_func(
             s = env.reset()
             noise.reset()
             noise.sigma = sigma_m.value
+            ep_steps = 0
+            ep_rw = 0
+            st_time = time.perf_counter()
             while not done:
                 # Step the environment
                 s_v = torch.Tensor(s).to(device)
@@ -63,11 +67,20 @@ def data_func(
                 a = a_v.cpu().numpy()
                 a = noise(a)
                 s_next, r, done, info = env.step(a)
-                env.render()
+                ep_steps += 1
+                ep_rw += r
+                
                 # Trace NStep rewards and add to mp queue
                 tracer.add(s, a, r, done)
                 while tracer:
                     queue_m.put(tracer.pop())
+                    
+                if done:
+                    info['fps'] = ep_steps / (time.perf_counter() - st_time)
+                    info['noise'] = noise.sigma
+                    info['ep_steps'] = ep_steps
+                    info['ep_rw'] = ep_rw
+                    queue_m.put(info)
 
                 # Set state for next step
                 s = s_next
@@ -83,6 +96,7 @@ def save_checkpoint(
     noise_sigma,
     n_samples,
     n_grads,
+    n_episodes,
     device,
     checkpoint_path: str
 ):
@@ -95,6 +109,7 @@ def save_checkpoint(
         "Q_opt_state_dict": Q_opt.state_dict(),
         "n_samples": n_samples,
         "n_grads": n_grads,
+        "n_episodes": n_episodes,
         "device": device
     }
     filename = os.path.join(
