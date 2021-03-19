@@ -20,7 +20,7 @@ from experience import *
 
 def get_env_specs(env_name):
     env = gym.make(env_name)
-    return env.observation_space.shape[0], env.action_space.shape[0]
+    return env.observation_space.shape[0], env.action_space.shape[0], env.spec.max_episode_steps
 
 
 if __name__ == "__main__":
@@ -37,7 +37,7 @@ if __name__ == "__main__":
     # Input Experiment Hyperparameters
     hp = HyperParameters(
         EXP_NAME=args.name,
-        ENV_NAME='SSLGoToBall-v0',
+        ENV_NAME='SSLGoToBallIR-v1',
         AGENT="ddpg_async",
         N_ROLLOUT_PROCESSES=2,
         LEARNING_RATE=0.0001,
@@ -49,6 +49,7 @@ if __name__ == "__main__":
         GAMMA=0.95,
         REWARD_STEPS=2,
         NOISE_SIGMA_INITIAL=1.0,
+        NOISE_SIGMA_MIN=0.15,
         NOISE_THETA=0.15,
         NOISE_SIGMA_DECAY=0.99,
         NOISE_SIGMA_GRAD_STEPS=20000,
@@ -62,7 +63,7 @@ if __name__ == "__main__":
                            hp.ENV_NAME + '_' + hp.EXP_NAME + '_' + current_time)
     os.makedirs(checkpoint_path, exist_ok=True)
 
-    hp.N_OBS, hp.N_ACTS = get_env_specs(hp.ENV_NAME)
+    hp.N_OBS, hp.N_ACTS, hp.MAX_EPISODE_STEPS = get_env_specs(hp.ENV_NAME)
 
     pi = DDPGActor(hp.N_OBS, hp.N_ACTS).to(device)
     Q = DDPGCritic(hp.N_OBS, hp.N_ACTS).to(device)
@@ -71,7 +72,7 @@ if __name__ == "__main__":
     pi.share_memory()
     exp_queue = mp.Queue(maxsize=hp.BATCH_SIZE)
     finish_event = mp.Event()
-    noise_sigma_m = mp.Value('f', hp.NOISE_SIGMA_INITIAL)
+    sigma_m = mp.Value('f', hp.NOISE_SIGMA_INITIAL)
     gif_req_m = mp.Value('i', -1)
     data_proc_list = []
     for _ in range(hp.N_ROLLOUT_PROCESSES):
@@ -82,7 +83,7 @@ if __name__ == "__main__":
                 device,
                 exp_queue,
                 finish_event,
-                noise_sigma_m,
+                sigma_m,
                 gif_req_m,
                 hp
             )
@@ -188,11 +189,12 @@ if __name__ == "__main__":
                     global_step=n_grads
                 )
 
-            if n_grads % hp.NOISE_SIGMA_GRAD_STEPS == 0:
+            if sigma_m.value < hp.NOISE_SIGMA_MIN \
+                or n_grads % hp.NOISE_SIGMA_GRAD_STEPS == 0:
                 # This syntax is needed to be process-safe
                 # The noise sigma value is accessed by the playing processes
-                with noise_sigma_m.get_lock():
-                    noise_sigma_m.value *= hp.NOISE_SIGMA_DECAY
+                with sigma_m.get_lock():
+                    sigma_m.value *= hp.NOISE_SIGMA_DECAY
 
             if n_grads % hp.SAVE_FREQUENCY == 0:
                 save_checkpoint(

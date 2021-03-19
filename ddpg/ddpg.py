@@ -27,9 +27,11 @@ class HyperParameters:
     GAMMA: float  # Reward Decay
     REWARD_STEPS: float  # For N-Steps Tracing
     NOISE_SIGMA_INITIAL: float  # Initial action noise sigma
+    NOISE_SIGMA_MIN: float  # Initial action noise sigma
     NOISE_THETA: float
     NOISE_SIGMA_DECAY: float  # Action noise sigma decay
     NOISE_SIGMA_GRAD_STEPS: int  # Decay action noise every _ grad steps
+    MAX_EPISODE_STEPS: int = -1
     GIF_FREQUENCY: int = -1
     N_OBS: int = 0
     N_ACTS: int = 0
@@ -88,17 +90,19 @@ def data_func(
             if gif_idx != -1:
                 generate_gif(env=env, filepath=os.path.join(hp.SAVE_PATH,\
                     f"gifs/{gif_idx:09d}.gif"), pi=copy.deepcopy(pi), 
-                    max_episode_steps=1000, device=device)
+                    max_episode_steps=hp.MAX_EPISODE_STEPS, device=device)
             
             
             done = False
             s = env.reset()
             noise.reset()
+            tracer.reset()
             noise.sigma = sigma_m.value
+            info = {}
             ep_steps = 0
             ep_rw = 0
             st_time = time.perf_counter()
-            while not done:
+            for i in range(hp.MAX_EPISODE_STEPS):
                 # Step the environment
                 s_v = torch.Tensor(s).to(device)
                 a_v = pi(s_v)
@@ -114,14 +118,17 @@ def data_func(
                     queue_m.put(tracer.pop())
 
                 if done:
-                    info['fps'] = ep_steps / (time.perf_counter() - st_time)
-                    info['noise'] = noise.sigma
-                    info['ep_steps'] = ep_steps
-                    info['ep_rw'] = ep_rw
-                    queue_m.put(info)
+                    break
 
                 # Set state for next step
                 s = s_next
+
+            info['fps'] = ep_steps / (time.perf_counter() - st_time)
+            info['noise'] = noise.sigma
+            info['ep_steps'] = ep_steps
+            info['ep_rw'] = ep_rw
+            queue_m.put(info)
+
 
 
 def save_checkpoint(
