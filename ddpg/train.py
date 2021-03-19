@@ -37,11 +37,11 @@ if __name__ == "__main__":
     # Input Experiment Hyperparameters
     hp = HyperParameters(
         EXP_NAME=args.name,
-        ENV_NAME='Pendulum-v0',
+        ENV_NAME='SSLGoToBall-v0',
         AGENT="ddpg_async",
         N_ROLLOUT_PROCESSES=2,
         LEARNING_RATE=0.0001,
-        REPLAY_SIZE=100000,
+        REPLAY_SIZE=1000000,
         REPLAY_INITIAL=10000,
         EXP_GRAD_RATIO=10,
         SAVE_FREQUENCY=1000,
@@ -51,11 +51,12 @@ if __name__ == "__main__":
         NOISE_SIGMA_INITIAL=1.0,
         NOISE_THETA=0.15,
         NOISE_SIGMA_DECAY=0.99,
-        NOISE_SIGMA_GRAD_STEPS=1000
+        NOISE_SIGMA_GRAD_STEPS=20000,
+        GIF_FREQUENCY = 20000
     )
 
-    path = os.path.join("saves", "ddpg_async", hp.EXP_NAME)
-    checkpoint_path = os.path.join(path, "Checkpoints")
+    hp.SAVE_PATH = os.path.join("saves", hp.AGENT, hp.EXP_NAME)
+    checkpoint_path = os.path.join(hp.SAVE_PATH, "Checkpoints")
     current_time = datetime.datetime.now().strftime('%m-%d_%H-%M-%S')
     tb_path = os.path.join('runs',
                            hp.ENV_NAME + '_' + hp.EXP_NAME + '_' + current_time)
@@ -71,6 +72,7 @@ if __name__ == "__main__":
     exp_queue = mp.Queue(maxsize=hp.BATCH_SIZE)
     finish_event = mp.Event()
     noise_sigma_m = mp.Value('f', hp.NOISE_SIGMA_INITIAL)
+    gif_req_m = mp.Value('i', -1)
     data_proc_list = []
     for _ in range(hp.N_ROLLOUT_PROCESSES):
         data_proc = mp.Process(
@@ -81,6 +83,7 @@ if __name__ == "__main__":
                 exp_queue,
                 finish_event,
                 noise_sigma_m,
+                gif_req_m,
                 hp
             )
         )
@@ -206,6 +209,10 @@ if __name__ == "__main__":
                     device=device,
                     checkpoint_path=checkpoint_path
                 )
+            
+            if n_grads % hp.GIF_FREQUENCY == 0 and hp.GIF_FREQUENCY != 0:
+                gif_req_m.value = n_grads
+                
 
     except KeyboardInterrupt:
         print("...Finishing...")
