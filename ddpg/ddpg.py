@@ -2,9 +2,11 @@ import torch
 import collections
 import time
 import gym
+import copy
 import numpy as np
 from experience import *
 from noise import *
+from gif import *
 import os
 from dataclasses import dataclass
 
@@ -28,8 +30,10 @@ class HyperParameters:
     NOISE_THETA: float
     NOISE_SIGMA_DECAY: float  # Action noise sigma decay
     NOISE_SIGMA_GRAD_STEPS: int  # Decay action noise every _ grad steps
+    GIF_FREQUENCY: int = -1
     N_OBS: int = 0
     N_ACTS: int = 0
+    SAVE_PATH: str = ""
 
 
 def unpack_batch_ddpg(
@@ -61,6 +65,7 @@ def data_func(
     queue_m,
     finish_event_m,
     sigma_m,
+    gif_req_m,
     hp
 ):
     env = gym.make(hp.ENV_NAME)
@@ -74,6 +79,18 @@ def data_func(
 
     with torch.no_grad():
         while not finish_event_m.is_set():
+            # Check for generate gif request
+            gif_idx = -1
+            with gif_req_m.get_lock():
+                if gif_req_m.value != -1:
+                    gif_idx = gif_req_m.value
+                    gif_req_m.value = -1
+            if gif_idx != -1:
+                generate_gif(env=env, filepath=os.path.join(hp.SAVE_PATH,\
+                    f"gifs/{gif_idx:09d}.gif"), pi=copy.deepcopy(pi), 
+                    max_episode_steps=1000, device=device)
+            
+            
             done = False
             s = env.reset()
             noise.reset()
