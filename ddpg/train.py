@@ -189,8 +189,8 @@ if __name__ == "__main__":
                     global_step=n_grads
                 )
 
-            if sigma_m.value < hp.NOISE_SIGMA_MIN \
-                or n_grads % hp.NOISE_SIGMA_GRAD_STEPS == 0:
+            if sigma_m.value > hp.NOISE_SIGMA_MIN \
+                and n_grads % hp.NOISE_SIGMA_GRAD_STEPS == 0:
                 # This syntax is needed to be process-safe
                 # The noise sigma value is accessed by the playing processes
                 with sigma_m.get_lock():
