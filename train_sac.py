@@ -13,8 +13,8 @@ import torch.nn.functional as F
 import torch.optim as optim
 from tensorboardX import SummaryWriter
 
-from agents.sac.rollout import SACHP, data_func, save_checkpoint
-from agents.sac.sac import GaussianPolicy, QNetwork, loss_sac, TargetCritic
+from agents.sac import SACHP, data_func, save_checkpoint, loss_sac,\
+    GaussianPolicy, QNetwork, TargetCritic
 from agents.utils import ExperienceReplayBuffer, get_env_specs
 
 
@@ -147,7 +147,7 @@ if __name__ == "__main__":
             batch = buffer.sample(hp.BATCH_SIZE)
             pi_loss, Q_loss1, Q_loss2, log_pi = loss_sac(alpha, hp.GAMMA,
                                                          batch, Q, pi,
-                                                         tgt_Q, args.cuda)
+                                                         tgt_Q, device)
 
             # train Entropy parameter
 
