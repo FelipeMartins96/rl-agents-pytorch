@@ -51,11 +51,11 @@ def unpack_batch(
             last_states.append(exp.state)
         else:
             last_states.append(exp.last_state)
-    states_v = torch.Tensor(states).to(device)
-    actions_v = torch.Tensor(actions).to(device)
-    rewards_v = torch.Tensor(rewards).to(device)
-    last_states_v = torch.Tensor(last_states).to(device)
-    dones_t = torch.BoolTensor(dones).to(device)
+    states_v = torch.Tensor(states).to(device, non_blocking=True)
+    actions_v = torch.Tensor(actions).to(device, non_blocking=True)
+    rewards_v = torch.Tensor(rewards).to(device, non_blocking=True)
+    last_states_v = torch.Tensor(last_states).to(device, non_blocking=True)
+    dones_t = torch.BoolTensor(dones).to(device, non_blocking=True)
     return states_v, actions_v, rewards_v, dones_t, last_states_v
 
 def save_checkpoint(
