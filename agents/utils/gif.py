@@ -10,7 +10,7 @@ def generate_gif(
     device, 
     max_episode_steps, 
     resize_to=None, 
-    duration=32
+    duration=25
 ):
     """
     Store a gif from the episode frames.
