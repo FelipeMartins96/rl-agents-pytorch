@@ -77,4 +77,3 @@ def save_checkpoint(
     filename = os.path.join(
         hp.CHECKPOINT_PATH, "checkpoint_{:09}.pth".format(metrics['n_grads']))
     torch.save(checkpoint, filename)
-    print("save")
