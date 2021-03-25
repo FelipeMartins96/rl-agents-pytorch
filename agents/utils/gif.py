@@ -29,7 +29,7 @@ def generate_gif(
     frames = []
     s = env.reset()
     for t in range(max_episode_steps):
-        a = pi(torch.Tensor(s).to(device)).cpu().numpy()
+        a = pi.get_action(torch.Tensor(s).to(device))
         s_next, r, done, info = env.step(a)
         # store frame
         frame = env.render(mode='rgb_array')

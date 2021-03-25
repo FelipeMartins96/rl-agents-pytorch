@@ -4,9 +4,9 @@ import time
 import gym
 import copy
 import numpy as np
-from experience import *
-from noise import *
-from gif import *
+from agents.utils.experience import NStepTracer
+from agents.utils.noise import OrnsteinUhlenbeckNoise
+from agents.utils.gif import generate_gif
 import os
 from dataclasses import dataclass
 
@@ -34,29 +34,6 @@ class HyperParameters:
     N_OBS: int = 0
     N_ACTS: int = 0
     SAVE_PATH: str = ""
-
-
-def unpack_batch_ddpg(
-    batch,
-    device="cpu"
-):
-    '''From a batch of experience, return values in Tensor form on device'''
-    states, actions, rewards, dones, last_states = [], [], [], [], []
-    for exp in batch:
-        states.append(exp.state)
-        actions.append(exp.action)
-        rewards.append(exp.reward)
-        dones.append(exp.last_state is None)
-        if exp.last_state is None:
-            last_states.append(exp.state)
-        else:
-            last_states.append(exp.last_state)
-    states_v = torch.Tensor(states).to(device)
-    actions_v = torch.Tensor(actions).to(device)
-    rewards_v = torch.Tensor(rewards).to(device)
-    last_states_v = torch.Tensor(last_states).to(device)
-    dones_t = torch.BoolTensor(dones).to(device)
-    return states_v, actions_v, rewards_v, dones_t, last_states_v
 
 
 def data_func(

@@ -18,6 +18,9 @@ class DDPGActor(nn.Module):
 
     def forward(self, x):
         return self.net(x)
+    
+    def get_action(self, x):
+        return self.net(x).detach().cpu().numpy()
 
 
 class DDPGCritic(nn.Module):
