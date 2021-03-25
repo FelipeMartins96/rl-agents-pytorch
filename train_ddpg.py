@@ -51,9 +51,9 @@ if __name__ == "__main__":
         GIF_FREQUENCY=25000
     )
 
-    current_time = datetime.datetime.now().strftime('%m-%d_%H-%M-%S')
-    tb_path = os.path.join('runs',
-                           hp.ENV_NAME + '_' + hp.EXP_NAME + '_' + current_time)
+    current_time = datetime.datetime.now().strftime('%b-%d_%H-%M-%S')
+    tb_path = os.path.join('runs', current_time + '_'
+                           + hp.ENV_NAME + '_' + hp.EXP_NAME)
 
     pi = DDPGActor(hp.N_OBS, hp.N_ACTS).to(device)
     Q = DDPGCritic(hp.N_OBS, hp.N_ACTS).to(device)
