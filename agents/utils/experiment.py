@@ -21,6 +21,7 @@ class HyperParameters:
     GAMMA: float  # Reward Decay
     REWARD_STEPS: float  # For N-Steps Tracing
     GIF_FREQUENCY: int= None
+    MAX_EPISODE_STEPS: int = None
     N_OBS: int= None
     N_ACTS: int= None
     SAVE_PATH: str = None
@@ -28,7 +29,7 @@ class HyperParameters:
     
     def __post_init__(self):
         env = gym.make(self.ENV_NAME)
-        self.N_OBS, self.N_ACTS = env.observation_space.shape[0], env.action_space.shape[0]
+        self.N_OBS, self.N_ACTS, self.MAX_EPISODE_STEPS = env.observation_space.shape[0], env.action_space.shape[0], env.spec.max_episode_steps
         self.SAVE_PATH = os.path.join("saves", self.ENV_NAME, self.AGENT, self.EXP_NAME)
         self.CHECKPOINT_PATH = os.path.join(self.SAVE_PATH, "checkpoints")
         os.makedirs(self.CHECKPOINT_PATH, exist_ok=True)

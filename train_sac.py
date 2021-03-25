@@ -47,7 +47,11 @@ if __name__ == "__main__":
         BATCH_SIZE=256,
         GAMMA=0.95,
         REWARD_STEPS=2,
-        GIF_FREQUENCY=20000
+        GIF_FREQUENCY=20000,
+        ALPHA=0.015,
+        LOG_SIG_MAX=2,
+        LOG_SIG_MIN=-20,
+        EPSILON=1e-6
     )
 
     current_time = datetime.datetime.now().strftime('%m-%d_%H-%M-%S')

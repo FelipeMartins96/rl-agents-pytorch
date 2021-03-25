@@ -43,6 +43,7 @@ if __name__ == "__main__":
         NOISE_SIGMA_INITIAL=1.0,
         NOISE_THETA=0.15,
         NOISE_SIGMA_DECAY=0.99,
+        NOISE_SIGMA_MIN=0.15,
         NOISE_SIGMA_GRAD_STEPS=20000,
         REPLAY_SIZE=1000000,
         REPLAY_INITIAL=1000,
@@ -61,7 +62,7 @@ if __name__ == "__main__":
     pi.share_memory()
     exp_queue = mp.Queue(maxsize=hp.BATCH_SIZE)
     finish_event = mp.Event()
-    noise_sigma_m = mp.Value('f', hp.NOISE_SIGMA_INITIAL)
+    sigma_m = mp.Value('f', hp.NOISE_SIGMA_INITIAL)
     gif_req_m = mp.Value('i', -1)
     data_proc_list = []
     for _ in range(hp.N_ROLLOUT_PROCESSES):
@@ -72,7 +73,7 @@ if __name__ == "__main__":
                 device,
                 exp_queue,
                 finish_event,
-                noise_sigma_m,
+                sigma_m,
                 gif_req_m,
                 hp
             )
@@ -178,17 +179,18 @@ if __name__ == "__main__":
                     global_step=n_grads
                 )
 
-            if n_grads % hp.NOISE_SIGMA_GRAD_STEPS == 0:
+            if sigma_m.value > hp.NOISE_SIGMA_MIN \
+                and n_grads % hp.NOISE_SIGMA_GRAD_STEPS == 0:
                 # This syntax is needed to be process-safe
                 # The noise sigma value is accessed by the playing processes
-                with noise_sigma_m.get_lock():
-                    noise_sigma_m.value *= hp.NOISE_SIGMA_DECAY
+                with sigma_m.get_lock():
+                    sigma_m.value *= hp.NOISE_SIGMA_DECAY
 
             if n_grads % hp.SAVE_FREQUENCY == 0:
                 save_checkpoint(
                     hp=hp,
                     metrics={
-                        'noise_sigma': noise_sigma_m.value,
+                        'noise_sigma': sigma_m.value,
                         'n_samples': n_samples,
                         'n_episodes': n_episodes,   
                         'n_grads': n_grads,

@@ -10,11 +10,12 @@ from dataclasses import dataclass
 
 @dataclass
 class DDPGHP(HyperParameters):
-    AGENT: str= "ddpg_async"
-    NOISE_SIGMA_INITIAL: float= None # Initial action noise sigma
-    NOISE_THETA: float= None
-    NOISE_SIGMA_DECAY: float= None  # Action noise sigma decay
-    NOISE_SIGMA_GRAD_STEPS: float= None  # Decay action noise every _ grad steps
+    AGENT: str = "ddpg_async"
+    NOISE_SIGMA_INITIAL: float = None # Initial action noise sigma
+    NOISE_THETA: float = None
+    NOISE_SIGMA_DECAY: float = None # Action noise sigma decay
+    NOISE_SIGMA_MIN: float = None
+    NOISE_SIGMA_GRAD_STEPS: float = None # Decay action noise every _ grad steps
 
 def data_func(
     pi,
@@ -44,18 +45,19 @@ def data_func(
                     gif_req_m.value = -1
             if gif_idx != -1:
                 generate_gif(env=env, filepath=os.path.join(hp.SAVE_PATH,\
-                    f"gifs/{gif_idx:09d}.gif"), pi=copy.deepcopy(pi), 
-                    max_episode_steps=1000, device=device)
+                    f"gifs/{gif_idx:09d}.gif"), pi=copy.deepcopy(pi), device=device)
             
             
             done = False
             s = env.reset()
             noise.reset()
+            tracer.reset()
             noise.sigma = sigma_m.value
+            info = {}
             ep_steps = 0
             ep_rw = 0
             st_time = time.perf_counter()
-            while not done:
+            for i in range(hp.MAX_EPISODE_STEPS):
                 # Step the environment
                 s_v = torch.Tensor(s).to(device)
                 a_v = pi(s_v)
@@ -71,11 +73,14 @@ def data_func(
                     queue_m.put(tracer.pop())
 
                 if done:
-                    info['fps'] = ep_steps / (time.perf_counter() - st_time)
-                    info['noise'] = noise.sigma
-                    info['ep_steps'] = ep_steps
-                    info['ep_rw'] = ep_rw
-                    queue_m.put(info)
-
+                    break
+                
                 # Set state for next step
                 s = s_next
+                
+            info['fps'] = ep_steps / (time.perf_counter() - st_time)
+            info['noise'] = noise.sigma
+            info['ep_steps'] = ep_steps
+            info['ep_rw'] = ep_rw
+            queue_m.put(info)
+

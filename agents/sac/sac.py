@@ -14,11 +14,11 @@ from agents.utils import HyperParameters, NStepTracer, generate_gif, unpack_batc
 
 @dataclass
 class SACHP(HyperParameters):
-    AGENT: str= "sac_async"
-    ALPHA: float = 0.015
-    LOG_SIG_MAX: int = 2
-    LOG_SIG_MIN: int = -20
-    EPSILON: float= 1e-6
+    ALPHA: float = None
+    LOG_SIG_MAX: int = None
+    LOG_SIG_MIN: int = None
+    EPSILON: float = None
+    AGENT: str = "sac_async"
 
 
 def data_func(
@@ -43,15 +43,16 @@ def data_func(
             if gif_idx != -1:
                 path = os.path.join(hp.SAVE_PATH, f"gifs/{gif_idx:09d}.gif")
                 generate_gif(env=env, filepath=path,
-                             pi=copy.deepcopy(pi),
-                             max_episode_steps=1000, device=device)
+                             pi=copy.deepcopy(pi), device=device)
 
             done = False
             s = env.reset()
+            tracer.reset()
+            info = {}
             ep_steps = 0
             ep_rw = 0
             st_time = time.perf_counter()
-            while not done:
+            for i in range(hp.MAX_EPISODE_STEPS):
                 # Step the environment
                 s_v = torch.Tensor(s).to(device)
                 a = pi.get_action(s_v)
@@ -65,13 +66,15 @@ def data_func(
                     queue_m.put(tracer.pop())
 
                 if done:
-                    info['fps'] = ep_steps / (time.perf_counter() - st_time)
-                    info['ep_steps'] = ep_steps
-                    info['ep_rw'] = ep_rw
-                    queue_m.put(info)
-
+                    break
+                
                 # Set state for next step
                 s = s_next
+
+            info['fps'] = ep_steps / (time.perf_counter() - st_time)
+            info['ep_steps'] = ep_steps
+            info['ep_rw'] = ep_rw
+            queue_m.put(info)
 
 
 def loss_sac(alpha, gamma, batch, crt_net, act_net,
