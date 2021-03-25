@@ -1,8 +1,8 @@
 import argparse
-import os
 import copy
-import datetime
 import dataclasses
+import datetime
+import os
 import time
 
 import gym
@@ -13,14 +13,9 @@ import torch.nn.functional as F
 import torch.optim as optim
 from tensorboardX import SummaryWriter
 
-from ddpg import *
-from networks import *
-from experience import *
-
-
-def get_env_specs(env_name):
-    env = gym.make(env_name)
-    return env.observation_space.shape[0], env.action_space.shape[0]
+from agents.ddpg import (DDPGActor, DDPGCritic, HyperParameters, TargetActor,
+                         TargetCritic, save_checkpoint, data_func)
+from agents.utils import unpack_batch, ExperienceReplayBuffer, get_env_specs
 
 
 if __name__ == "__main__":
@@ -39,7 +34,7 @@ if __name__ == "__main__":
         EXP_NAME=args.name,
         ENV_NAME='SSLGoToBall-v0',
         AGENT="ddpg_async",
-        N_ROLLOUT_PROCESSES=2,
+        N_ROLLOUT_PROCESSES=1,
         LEARNING_RATE=0.0001,
         REPLAY_SIZE=1000000,
         REPLAY_INITIAL=10000,
@@ -52,7 +47,7 @@ if __name__ == "__main__":
         NOISE_THETA=0.15,
         NOISE_SIGMA_DECAY=0.99,
         NOISE_SIGMA_GRAD_STEPS=20000,
-        GIF_FREQUENCY = 20000
+        GIF_FREQUENCY=20000
     )
 
     hp.SAVE_PATH = os.path.join("saves", hp.AGENT, hp.EXP_NAME)
@@ -101,11 +96,11 @@ if __name__ == "__main__":
     n_samples = 0
     n_episodes = 0
     best_reward = None
-    
+
     # Record experiment parameters
     writer.add_text(
         tag="HyperParameters",
-        text_string=str(hp).replace(',',"  \n"),
+        text_string=str(hp).replace(',', "  \n"),
     )
 
     try:
@@ -145,7 +140,7 @@ if __name__ == "__main__":
 
             # Sample a batch and load it as a tensor on device
             batch = buffer.sample(hp.BATCH_SIZE)
-            S_v, A_v, r_v, dones, S_next_v = unpack_batch_ddpg(batch, device)
+            S_v, A_v, r_v, dones, S_next_v = unpack_batch(batch, device)
 
             # train critic
             Q_opt.zero_grad()
@@ -209,10 +204,9 @@ if __name__ == "__main__":
                     device=device,
                     checkpoint_path=checkpoint_path
                 )
-            
+
             if n_grads % hp.GIF_FREQUENCY == 0 and hp.GIF_FREQUENCY != 0:
                 gif_req_m.value = n_grads
-                
 
     except KeyboardInterrupt:
         print("...Finishing...")
