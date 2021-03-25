@@ -14,8 +14,8 @@ import torch.optim as optim
 from tensorboardX import SummaryWriter
 
 from agents.ddpg import (DDPGActor, DDPGCritic, DDPGHP, TargetActor,
-                         TargetCritic, save_checkpoint, data_func)
-from agents.utils import unpack_batch, ExperienceReplayBuffer
+                         TargetCritic, data_func)
+from agents.utils import unpack_batch, ExperienceReplayBuffer, save_checkpoint
 
 
 if __name__ == "__main__":
@@ -32,13 +32,11 @@ if __name__ == "__main__":
     # Input Experiment Hyperparameters
     hp = DDPGHP(
         EXP_NAME=args.name,
+        DEVICE=device,
         ENV_NAME='SSLGoToBall-v0',
         N_ROLLOUT_PROCESSES=1,
         LEARNING_RATE=0.0001,
-        REPLAY_SIZE=1000000,
-        REPLAY_INITIAL=10000,
         EXP_GRAD_RATIO=10,
-        SAVE_FREQUENCY=1000,
         BATCH_SIZE=256,
         GAMMA=0.95,
         REWARD_STEPS=2,
@@ -46,15 +44,15 @@ if __name__ == "__main__":
         NOISE_THETA=0.15,
         NOISE_SIGMA_DECAY=0.99,
         NOISE_SIGMA_GRAD_STEPS=20000,
+        REPLAY_SIZE=1000000,
+        REPLAY_INITIAL=1000,
+        SAVE_FREQUENCY=1000,
         GIF_FREQUENCY=20000
     )
 
-    hp.SAVE_PATH = os.path.join("saves", hp.AGENT, hp.EXP_NAME)
-    checkpoint_path = os.path.join(hp.SAVE_PATH, "Checkpoints")
     current_time = datetime.datetime.now().strftime('%m-%d_%H-%M-%S')
     tb_path = os.path.join('runs',
                            hp.ENV_NAME + '_' + hp.EXP_NAME + '_' + current_time)
-    os.makedirs(checkpoint_path, exist_ok=True)
 
     pi = DDPGActor(hp.N_OBS, hp.N_ACTS).to(device)
     Q = DDPGCritic(hp.N_OBS, hp.N_ACTS).to(device)
@@ -188,18 +186,17 @@ if __name__ == "__main__":
 
             if n_grads % hp.SAVE_FREQUENCY == 0:
                 save_checkpoint(
-                    experiment=hp.EXP_NAME,
-                    agent="ddpg_async",
+                    hp=hp,
+                    metrics={
+                        'noise_sigma': noise_sigma_m.value,
+                        'n_samples': n_samples,
+                        'n_episodes': n_episodes,   
+                        'n_grads': n_grads,
+                    },
                     pi=pi,
                     Q=Q,
                     pi_opt=pi_opt,
-                    Q_opt=Q_opt,
-                    noise_sigma=0,
-                    n_samples=n_samples,
-                    n_grads=n_grads,
-                    n_episodes=n_episodes,
-                    device=device,
-                    checkpoint_path=checkpoint_path
+                    Q_opt=Q_opt
                 )
 
             if n_grads % hp.GIF_FREQUENCY == 0 and hp.GIF_FREQUENCY != 0:

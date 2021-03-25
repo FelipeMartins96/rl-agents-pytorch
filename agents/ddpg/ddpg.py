@@ -10,11 +10,11 @@ from dataclasses import dataclass
 
 @dataclass
 class DDPGHP(HyperParameters):
-    AGENT: str or None = "ddpg_async"
+    AGENT: str= "ddpg_async"
     NOISE_SIGMA_INITIAL: float= None # Initial action noise sigma
-    NOISE_THETA: float or None = None
-    NOISE_SIGMA_DECAY: float or None = None  # Action noise sigma decay
-    NOISE_SIGMA_GRAD_STEPS: float or None = None  # Decay action noise every _ grad steps
+    NOISE_THETA: float= None
+    NOISE_SIGMA_DECAY: float= None  # Action noise sigma decay
+    NOISE_SIGMA_GRAD_STEPS: float= None  # Decay action noise every _ grad steps
 
 def data_func(
     pi,
@@ -79,34 +79,3 @@ def data_func(
 
                 # Set state for next step
                 s = s_next
-
-
-def save_checkpoint(
-    experiment: str,
-    agent: str,
-    pi,
-    Q,
-    pi_opt,
-    Q_opt,
-    noise_sigma,
-    n_samples,
-    n_grads,
-    n_episodes,
-    device,
-    checkpoint_path: str
-):
-    checkpoint = {
-        "name": experiment,
-        "agent": agent,
-        "pi_state_dict": pi.state_dict(),
-        "Q_state_dict": Q.state_dict(),
-        "pi_opt_state_dict": pi_opt.state_dict(),
-        "Q_opt_state_dict": Q_opt.state_dict(),
-        "n_samples": n_samples,
-        "n_grads": n_grads,
-        "n_episodes": n_episodes,
-        "device": device
-    }
-    filename = os.path.join(
-        checkpoint_path, "checkpoint_{:09}.pth".format(n_grads))
-    torch.save(checkpoint, filename)

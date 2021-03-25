@@ -14,7 +14,7 @@ from agents.utils import HyperParameters, NStepTracer, generate_gif, unpack_batc
 
 @dataclass
 class SACHP(HyperParameters):
-    AGENT: str or None = "sac_async"
+    AGENT: str= "sac_async"
     ALPHA: float = 0.015
     LOG_SIG_MAX: int = 2
     LOG_SIG_MIN: int = -20
@@ -118,35 +118,3 @@ def loss_sac(alpha, gamma, batch, crt_net, act_net,
     policy_loss = policy_loss.mean()
 
     return policy_loss, qf1_loss, qf2_loss, log_pi
-
-
-def save_checkpoint(
-    experiment: str,
-    agent: str,
-    pi,
-    Q,
-    pi_opt,
-    Q_opt,
-    alpha,
-    n_samples,
-    n_grads,
-    n_episodes,
-    device,
-    checkpoint_path: str
-):
-    checkpoint = {
-        "name": experiment,
-        "agent": agent,
-        "pi_state_dict": pi.state_dict(),
-        "Q_state_dict": Q.state_dict(),
-        "pi_opt_state_dict": pi_opt.state_dict(),
-        "Q_opt_state_dict": Q_opt.state_dict(),
-        "alpha": alpha,
-        "n_samples": n_samples,
-        "n_grads": n_grads,
-        "n_episodes": n_episodes,
-        "device": device
-    }
-    filename = os.path.join(
-        checkpoint_path, "checkpoint_{:09}.pth".format(n_grads))
-    torch.save(checkpoint, filename)

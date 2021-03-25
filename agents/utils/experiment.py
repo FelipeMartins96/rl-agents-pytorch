@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+import dataclasses
 
 import gym
 import rc_gym
@@ -6,7 +6,7 @@ import torch
 import os
 
 
-@dataclass
+@dataclasses.dataclass
 class HyperParameters:
     """Class containing all experiment hyperparameters"""
     EXP_NAME: str
@@ -20,15 +20,19 @@ class HyperParameters:
     BATCH_SIZE: int
     GAMMA: float  # Reward Decay
     REWARD_STEPS: float  # For N-Steps Tracing
-    GIF_FREQUENCY: int or None = None
-    N_OBS: int or None = None
-    N_ACTS: int or None = None
-    SAVE_PATH: str or None = None
+    GIF_FREQUENCY: int= None
+    N_OBS: int= None
+    N_ACTS: int= None
+    SAVE_PATH: str = None
+    DEVICE: str = None
     
     def __post_init__(self):
         env = gym.make(self.ENV_NAME)
         self.N_OBS, self.N_ACTS = env.observation_space.shape[0], env.action_space.shape[0]
-        self.SAVE_PATH = os.path.join("saves", self.AGENT, self.EXP_NAME)
+        self.SAVE_PATH = os.path.join("saves", self.ENV_NAME, self.AGENT, self.EXP_NAME)
+        self.CHECKPOINT_PATH = os.path.join(self.SAVE_PATH, "checkpoints")
+        os.makedirs(self.CHECKPOINT_PATH, exist_ok=True)
+        
 
 
 def unpack_batch(
@@ -52,3 +56,24 @@ def unpack_batch(
     last_states_v = torch.Tensor(last_states).to(device)
     dones_t = torch.BoolTensor(dones).to(device)
     return states_v, actions_v, rewards_v, dones_t, last_states_v
+
+def save_checkpoint(
+    hp,
+    metrics,
+    pi,
+    Q,
+    pi_opt,
+    Q_opt
+):
+    checkpoint = dataclasses.asdict(hp)
+    checkpoint.update(metrics)
+    checkpoint.update({
+        "pi_state_dict": pi.state_dict(),
+        "Q_state_dict": Q.state_dict(),
+        "pi_opt_state_dict": pi_opt.state_dict(),
+        "Q_opt_state_dict": Q_opt.state_dict(),
+    })
+    filename = os.path.join(
+        hp.CHECKPOINT_PATH, "checkpoint_{:09}.pth".format(metrics['n_grads']))
+    torch.save(checkpoint, filename)
+    print("save")
