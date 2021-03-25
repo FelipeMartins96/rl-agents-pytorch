@@ -15,7 +15,7 @@ from tensorboardX import SummaryWriter
 
 from agents.sac import SACHP, data_func, save_checkpoint, loss_sac,\
     GaussianPolicy, QNetwork, TargetCritic
-from agents.utils import ExperienceReplayBuffer, get_env_specs
+from agents.utils import ExperienceReplayBuffer
 
 
 if __name__ == "__main__":
@@ -49,15 +49,13 @@ if __name__ == "__main__":
         REWARD_STEPS=2,
         GIF_FREQUENCY=20000
     )
+    print(hp)
 
-    hp.SAVE_PATH = os.path.join("saves", hp.AGENT, hp.EXP_NAME)
     checkpoint_path = os.path.join(hp.SAVE_PATH, "Checkpoints")
     current_time = datetime.datetime.now().strftime('%m-%d_%H-%M-%S')
     tb_path = os.path.join('runs',
                            hp.ENV_NAME + '_' + hp.EXP_NAME + '_' + current_time)
     os.makedirs(checkpoint_path, exist_ok=True)
-
-    hp.N_OBS, hp.N_ACTS = get_env_specs(hp.ENV_NAME)
 
     # Actor-Critic
     pi = GaussianPolicy(hp.N_OBS, hp.N_ACTS,

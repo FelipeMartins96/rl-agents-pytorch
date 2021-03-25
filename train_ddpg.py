@@ -13,9 +13,9 @@ import torch.nn.functional as F
 import torch.optim as optim
 from tensorboardX import SummaryWriter
 
-from agents.ddpg import (DDPGActor, DDPGCritic, HyperParameters, TargetActor,
+from agents.ddpg import (DDPGActor, DDPGCritic, DDPGHP, TargetActor,
                          TargetCritic, save_checkpoint, data_func)
-from agents.utils import unpack_batch, ExperienceReplayBuffer, get_env_specs
+from agents.utils import unpack_batch, ExperienceReplayBuffer
 
 
 if __name__ == "__main__":
@@ -30,10 +30,9 @@ if __name__ == "__main__":
     device = "cuda" if args.cuda else "cpu"
 
     # Input Experiment Hyperparameters
-    hp = HyperParameters(
+    hp = DDPGHP(
         EXP_NAME=args.name,
         ENV_NAME='SSLGoToBall-v0',
-        AGENT="ddpg_async",
         N_ROLLOUT_PROCESSES=1,
         LEARNING_RATE=0.0001,
         REPLAY_SIZE=1000000,
@@ -56,8 +55,6 @@ if __name__ == "__main__":
     tb_path = os.path.join('runs',
                            hp.ENV_NAME + '_' + hp.EXP_NAME + '_' + current_time)
     os.makedirs(checkpoint_path, exist_ok=True)
-
-    hp.N_OBS, hp.N_ACTS = get_env_specs(hp.ENV_NAME)
 
     pi = DDPGActor(hp.N_OBS, hp.N_ACTS).to(device)
     Q = DDPGCritic(hp.N_OBS, hp.N_ACTS).to(device)

@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import gym
 import rc_gym
 import torch
+import os
 
 
 @dataclass
@@ -10,7 +11,6 @@ class HyperParameters:
     """Class containing all experiment hyperparameters"""
     EXP_NAME: str
     ENV_NAME: str
-    AGENT: str
     N_ROLLOUT_PROCESSES: int
     LEARNING_RATE: float
     REPLAY_SIZE: int  # Maximum Replay Buffer Sizer
@@ -20,15 +20,15 @@ class HyperParameters:
     BATCH_SIZE: int
     GAMMA: float  # Reward Decay
     REWARD_STEPS: float  # For N-Steps Tracing
-    GIF_FREQUENCY: int = -1
-    N_OBS: int = 0
-    N_ACTS: int = 0
-    SAVE_PATH: str = ""
-
-
-def get_env_specs(env_name):
-    env = gym.make(env_name)
-    return env.observation_space.shape[0], env.action_space.shape[0]
+    GIF_FREQUENCY: int or None = None
+    N_OBS: int or None = None
+    N_ACTS: int or None = None
+    SAVE_PATH: str or None = None
+    
+    def __post_init__(self):
+        env = gym.make(self.ENV_NAME)
+        self.N_OBS, self.N_ACTS = env.observation_space.shape[0], env.action_space.shape[0]
+        self.SAVE_PATH = os.path.join("saves", self.AGENT, self.EXP_NAME)
 
 
 def unpack_batch(

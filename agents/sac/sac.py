@@ -14,6 +14,7 @@ from agents.utils import HyperParameters, NStepTracer, generate_gif, unpack_batc
 
 @dataclass
 class SACHP(HyperParameters):
+    AGENT: str or None = "sac_async"
     ALPHA: float = 0.015
     LOG_SIG_MAX: int = 2
     LOG_SIG_MIN: int = -20
