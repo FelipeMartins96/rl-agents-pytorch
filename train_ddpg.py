@@ -13,9 +13,9 @@ import torch.nn.functional as F
 import torch.optim as optim
 from tensorboardX import SummaryWriter
 
-from agents.ddpg import (DDPGActor, DDPGCritic, HyperParameters, TargetActor,
-                         TargetCritic, save_checkpoint, data_func)
-from agents.utils import unpack_batch, ExperienceReplayBuffer, get_env_specs
+from agents.ddpg import (DDPGActor, DDPGCritic, DDPGHP, TargetActor,
+                         TargetCritic, data_func)
+from agents.utils import unpack_batch, ExperienceReplayBuffer, save_checkpoint
 
 
 if __name__ == "__main__":
@@ -30,34 +30,30 @@ if __name__ == "__main__":
     device = "cuda" if args.cuda else "cpu"
 
     # Input Experiment Hyperparameters
-    hp = HyperParameters(
+    hp = DDPGHP(
         EXP_NAME=args.name,
+        DEVICE=device,
         ENV_NAME='SSLGoToBall-v0',
-        AGENT="ddpg_async",
-        N_ROLLOUT_PROCESSES=1,
+        N_ROLLOUT_PROCESSES=2,
         LEARNING_RATE=0.0001,
-        REPLAY_SIZE=1000000,
-        REPLAY_INITIAL=10000,
         EXP_GRAD_RATIO=10,
-        SAVE_FREQUENCY=1000,
         BATCH_SIZE=256,
-        GAMMA=0.95,
-        REWARD_STEPS=2,
-        NOISE_SIGMA_INITIAL=1.0,
+        GAMMA=0.98,
+        REWARD_STEPS=3,
+        NOISE_SIGMA_INITIAL=0.8,
         NOISE_THETA=0.15,
         NOISE_SIGMA_DECAY=0.99,
-        NOISE_SIGMA_GRAD_STEPS=20000,
-        GIF_FREQUENCY=20000
+        NOISE_SIGMA_MIN=0.15,
+        NOISE_SIGMA_GRAD_STEPS=3000,
+        REPLAY_SIZE=1000000,
+        REPLAY_INITIAL=100000,
+        SAVE_FREQUENCY=25000,
+        GIF_FREQUENCY=25000
     )
 
-    hp.SAVE_PATH = os.path.join("saves", hp.AGENT, hp.EXP_NAME)
-    checkpoint_path = os.path.join(hp.SAVE_PATH, "Checkpoints")
     current_time = datetime.datetime.now().strftime('%m-%d_%H-%M-%S')
     tb_path = os.path.join('runs',
                            hp.ENV_NAME + '_' + hp.EXP_NAME + '_' + current_time)
-    os.makedirs(checkpoint_path, exist_ok=True)
-
-    hp.N_OBS, hp.N_ACTS = get_env_specs(hp.ENV_NAME)
 
     pi = DDPGActor(hp.N_OBS, hp.N_ACTS).to(device)
     Q = DDPGCritic(hp.N_OBS, hp.N_ACTS).to(device)
@@ -66,7 +62,7 @@ if __name__ == "__main__":
     pi.share_memory()
     exp_queue = mp.Queue(maxsize=hp.BATCH_SIZE)
     finish_event = mp.Event()
-    noise_sigma_m = mp.Value('f', hp.NOISE_SIGMA_INITIAL)
+    sigma_m = mp.Value('f', hp.NOISE_SIGMA_INITIAL)
     gif_req_m = mp.Value('i', -1)
     data_proc_list = []
     for _ in range(hp.N_ROLLOUT_PROCESSES):
@@ -77,7 +73,7 @@ if __name__ == "__main__":
                 device,
                 exp_queue,
                 finish_event,
-                noise_sigma_m,
+                sigma_m,
                 gif_req_m,
                 hp
             )
@@ -183,29 +179,29 @@ if __name__ == "__main__":
                     global_step=n_grads
                 )
 
-            if n_grads % hp.NOISE_SIGMA_GRAD_STEPS == 0:
+            if hp.NOISE_SIGMA_DECAY and sigma_m.value > hp.NOISE_SIGMA_MIN \
+                and n_grads % hp.NOISE_SIGMA_GRAD_STEPS == 0:
                 # This syntax is needed to be process-safe
                 # The noise sigma value is accessed by the playing processes
-                with noise_sigma_m.get_lock():
-                    noise_sigma_m.value *= hp.NOISE_SIGMA_DECAY
+                with sigma_m.get_lock():
+                    sigma_m.value *= hp.NOISE_SIGMA_DECAY
 
             if n_grads % hp.SAVE_FREQUENCY == 0:
                 save_checkpoint(
-                    experiment=hp.EXP_NAME,
-                    agent="ddpg_async",
+                    hp=hp,
+                    metrics={
+                        'noise_sigma': sigma_m.value,
+                        'n_samples': n_samples,
+                        'n_episodes': n_episodes,   
+                        'n_grads': n_grads,
+                    },
                     pi=pi,
                     Q=Q,
                     pi_opt=pi_opt,
-                    Q_opt=Q_opt,
-                    noise_sigma=0,
-                    n_samples=n_samples,
-                    n_grads=n_grads,
-                    n_episodes=n_episodes,
-                    device=device,
-                    checkpoint_path=checkpoint_path
+                    Q_opt=Q_opt
                 )
 
-            if n_grads % hp.GIF_FREQUENCY == 0 and hp.GIF_FREQUENCY != 0:
+            if hp.GIF_FREQUENCY and n_grads % hp.GIF_FREQUENCY == 0 and hp.GIF_FREQUENCY != 0:
                 gif_req_m.value = n_grads
 
     except KeyboardInterrupt:

@@ -8,7 +8,7 @@ def generate_gif(
     filepath, 
     pi, 
     device, 
-    max_episode_steps, 
+    max_episode_steps=1200, 
     resize_to=None, 
     duration=25
 ):

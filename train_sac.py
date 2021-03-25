@@ -13,9 +13,9 @@ import torch.nn.functional as F
 import torch.optim as optim
 from tensorboardX import SummaryWriter
 
-from agents.sac.rollout import SACHP, data_func, save_checkpoint
-from agents.sac.sac import GaussianPolicy, QNetwork, loss_sac, TargetCritic
-from agents.utils import ExperienceReplayBuffer, get_env_specs
+from agents.sac import SACHP, data_func, loss_sac,\
+    GaussianPolicy, QNetwork, TargetCritic
+from agents.utils import ExperienceReplayBuffer, save_checkpoint
 
 
 if __name__ == "__main__":
@@ -40,24 +40,23 @@ if __name__ == "__main__":
         AGENT="sac_async",
         N_ROLLOUT_PROCESSES=args.num_processes,
         LEARNING_RATE=0.0001,
-        REPLAY_SIZE=1000000,
-        REPLAY_INITIAL=10000,
         EXP_GRAD_RATIO=10,
-        SAVE_FREQUENCY=1000,
         BATCH_SIZE=256,
-        GAMMA=0.95,
-        REWARD_STEPS=2,
-        GIF_FREQUENCY=20000
+        GAMMA=0.98,
+        REWARD_STEPS=3,
+        ALPHA=0.015,
+        LOG_SIG_MAX=2,
+        LOG_SIG_MIN=-20,
+        EPSILON=1e-6,
+        REPLAY_SIZE=1000000,
+        REPLAY_INITIAL=100000,
+        SAVE_FREQUENCY=25000,
+        GIF_FREQUENCY=25000
     )
 
-    hp.SAVE_PATH = os.path.join("saves", hp.AGENT, hp.EXP_NAME)
-    checkpoint_path = os.path.join(hp.SAVE_PATH, "Checkpoints")
     current_time = datetime.datetime.now().strftime('%m-%d_%H-%M-%S')
     tb_path = os.path.join('runs',
                            hp.ENV_NAME + '_' + hp.EXP_NAME + '_' + current_time)
-    os.makedirs(checkpoint_path, exist_ok=True)
-
-    hp.N_OBS, hp.N_ACTS = get_env_specs(hp.ENV_NAME)
 
     # Actor-Critic
     pi = GaussianPolicy(hp.N_OBS, hp.N_ACTS,
@@ -147,7 +146,7 @@ if __name__ == "__main__":
             batch = buffer.sample(hp.BATCH_SIZE)
             pi_loss, Q_loss1, Q_loss2, log_pi = loss_sac(alpha, hp.GAMMA,
                                                          batch, Q, pi,
-                                                         tgt_Q, args.cuda)
+                                                         tgt_Q, device)
 
             # train Entropy parameter
 
@@ -197,21 +196,20 @@ if __name__ == "__main__":
 
             if n_grads % hp.SAVE_FREQUENCY == 0:
                 save_checkpoint(
-                    experiment=hp.EXP_NAME,
-                    agent=hp.AGENT,
+                    hp=hp,
+                    metrics ={
+                        'alpha': alpha,
+                        'n_samples': n_samples,
+                        'n_grads': n_grads,
+                        'n_episodes': n_episodes        
+                    },
                     pi=pi,
                     Q=Q,
                     pi_opt=pi_opt,
-                    Q_opt=Q_opt,
-                    alpha=alpha,
-                    n_samples=n_samples,
-                    n_grads=n_grads,
-                    n_episodes=n_episodes,
-                    device=device,
-                    checkpoint_path=checkpoint_path
+                    Q_opt=Q_opt
                 )
 
-            if n_grads % hp.GIF_FREQUENCY == 0 and hp.GIF_FREQUENCY != 0:
+            if hp.GIF_FREQUENCY and n_grads % hp.GIF_FREQUENCY == 0 and hp.GIF_FREQUENCY != 0:
                 gif_req_m.value = n_grads
 
     except KeyboardInterrupt:
