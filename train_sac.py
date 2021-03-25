@@ -40,18 +40,18 @@ if __name__ == "__main__":
         AGENT="sac_async",
         N_ROLLOUT_PROCESSES=args.num_processes,
         LEARNING_RATE=0.0001,
-        REPLAY_SIZE=1000000,
-        REPLAY_INITIAL=1000,
         EXP_GRAD_RATIO=10,
-        SAVE_FREQUENCY=1000,
         BATCH_SIZE=256,
-        GAMMA=0.95,
-        REWARD_STEPS=2,
-        GIF_FREQUENCY=20000,
+        GAMMA=0.98,
+        REWARD_STEPS=3,
         ALPHA=0.015,
         LOG_SIG_MAX=2,
         LOG_SIG_MIN=-20,
-        EPSILON=1e-6
+        EPSILON=1e-6,
+        REPLAY_SIZE=1000000,
+        REPLAY_INITIAL=100000,
+        SAVE_FREQUENCY=25000,
+        GIF_FREQUENCY=25000
     )
 
     current_time = datetime.datetime.now().strftime('%m-%d_%H-%M-%S')
@@ -209,7 +209,7 @@ if __name__ == "__main__":
                     Q_opt=Q_opt
                 )
 
-            if n_grads % hp.GIF_FREQUENCY == 0 and hp.GIF_FREQUENCY != 0:
+            if hp.GIF_FREQUENCY and n_grads % hp.GIF_FREQUENCY == 0 and hp.GIF_FREQUENCY != 0:
                 gif_req_m.value = n_grads
 
     except KeyboardInterrupt:

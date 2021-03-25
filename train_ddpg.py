@@ -34,21 +34,21 @@ if __name__ == "__main__":
         EXP_NAME=args.name,
         DEVICE=device,
         ENV_NAME='SSLGoToBall-v0',
-        N_ROLLOUT_PROCESSES=1,
+        N_ROLLOUT_PROCESSES=2,
         LEARNING_RATE=0.0001,
         EXP_GRAD_RATIO=10,
         BATCH_SIZE=256,
-        GAMMA=0.95,
-        REWARD_STEPS=2,
-        NOISE_SIGMA_INITIAL=1.0,
+        GAMMA=0.98,
+        REWARD_STEPS=3,
+        NOISE_SIGMA_INITIAL=0.8,
         NOISE_THETA=0.15,
         NOISE_SIGMA_DECAY=0.99,
         NOISE_SIGMA_MIN=0.15,
-        NOISE_SIGMA_GRAD_STEPS=20000,
+        NOISE_SIGMA_GRAD_STEPS=3000,
         REPLAY_SIZE=1000000,
-        REPLAY_INITIAL=1000,
-        SAVE_FREQUENCY=1000,
-        GIF_FREQUENCY=20000
+        REPLAY_INITIAL=100000,
+        SAVE_FREQUENCY=25000,
+        GIF_FREQUENCY=25000
     )
 
     current_time = datetime.datetime.now().strftime('%m-%d_%H-%M-%S')
@@ -179,7 +179,7 @@ if __name__ == "__main__":
                     global_step=n_grads
                 )
 
-            if sigma_m.value > hp.NOISE_SIGMA_MIN \
+            if hp.NOISE_SIGMA_DECAY and sigma_m.value > hp.NOISE_SIGMA_MIN \
                 and n_grads % hp.NOISE_SIGMA_GRAD_STEPS == 0:
                 # This syntax is needed to be process-safe
                 # The noise sigma value is accessed by the playing processes
@@ -201,7 +201,7 @@ if __name__ == "__main__":
                     Q_opt=Q_opt
                 )
 
-            if n_grads % hp.GIF_FREQUENCY == 0 and hp.GIF_FREQUENCY != 0:
+            if hp.GIF_FREQUENCY and n_grads % hp.GIF_FREQUENCY == 0 and hp.GIF_FREQUENCY != 0:
                 gif_req_m.value = n_grads
 
     except KeyboardInterrupt:
