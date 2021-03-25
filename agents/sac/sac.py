@@ -51,9 +51,12 @@ class QNetwork(nn.Module):
 
 class GaussianPolicy(nn.Module):
     def __init__(self, num_inputs, num_actions,
-                 hidden_dim=256, action_space=None):
+                 log_sig_min, log_sig_max,
+                 epsilon, hidden_dim=256, action_space=None):
         super(GaussianPolicy, self).__init__()
-
+        self.log_sig_min = log_sig_min
+        self.log_sig_max = log_sig_max
+        self.epsilon = epsilon
         self.linear1 = nn.Linear(num_inputs, hidden_dim)
         self.linear2 = nn.Linear(hidden_dim, hidden_dim)
 
@@ -77,7 +80,8 @@ class GaussianPolicy(nn.Module):
         x2 = F.relu(self.linear2(x1))
         mean = self.mean_linear(x2)
         log_std = self.log_std_linear(x2)
-        log_std = torch.clamp(log_std, min=LOG_SIG_MIN, max=LOG_SIG_MAX)
+        log_std = torch.clamp(log_std, min=self.log_sig_min,
+                              max=self.log_sig_max)
         return mean, log_std
 
     def sample(self, state):
@@ -90,7 +94,10 @@ class GaussianPolicy(nn.Module):
         action = y_t * self.action_scale + self.action_bias
         log_prob = normal.log_prob(x_t)
         # Enforcing Action Bound
-        log_prob -= torch.log(self.action_scale * (1 - y_t.pow(2)) + epsilon)
+        log_action = torch.log(
+            self.action_scale * (1 - y_t.pow(2)) + self.epsilon
+        )
+        log_prob = log_prob - log_action
         log_prob = log_prob.sum(1, keepdim=True)
         mean = torch.tanh(mean) * self.action_scale + self.action_bias
         return action, log_prob, mean

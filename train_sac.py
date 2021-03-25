@@ -60,7 +60,9 @@ if __name__ == "__main__":
     hp.N_OBS, hp.N_ACTS = get_env_specs(hp.ENV_NAME)
 
     # Actor-Critic
-    pi = GaussianPolicy(hp.N_OBS, hp.N_ACTS).to(device)
+    pi = GaussianPolicy(hp.N_OBS, hp.N_ACTS,
+                        hp.LOG_SIG_MIN,
+                        hp.LOG_SIG_MAX, hp.EPSILON).to(device)
     Q = QNetwork(hp.N_OBS, hp.N_ACTS).to(device)
     # Entropy
     alpha = hp.ALPHA

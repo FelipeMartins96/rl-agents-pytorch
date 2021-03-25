@@ -13,6 +13,9 @@ from agents.utils import HyperParameters, NStepTracer, generate_gif
 @dataclass
 class SACHP(HyperParameters):
     ALPHA: float = 0.015
+    LOG_SIG_MAX: int = 2
+    LOG_SIG_MIN: int = -20
+    EPSILON: float= 1e-6
 
 
 def data_func(
