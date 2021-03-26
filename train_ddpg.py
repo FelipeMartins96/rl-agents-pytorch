@@ -11,7 +11,6 @@ import rc_gym
 import torch.multiprocessing as mp
 import torch.nn.functional as F
 import torch.optim as optim
-from tensorboardX import SummaryWriter
 
 import wandb
 from agents.ddpg import (DDPGHP, DDPGActor, DDPGCritic, TargetActor,

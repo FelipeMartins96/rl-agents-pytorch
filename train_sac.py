@@ -10,7 +10,6 @@ import torch
 import torch.multiprocessing as mp
 import torch.nn.functional as F
 import torch.optim as optim
-from tensorboardX import SummaryWriter
 
 import wandb
 from agents.sac import (SACHP, GaussianPolicy, QNetwork, TargetCritic,
