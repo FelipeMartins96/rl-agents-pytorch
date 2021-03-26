@@ -5,6 +5,8 @@ import rc_gym
 import torch
 import os
 
+import wandb
+
 
 @dataclasses.dataclass
 class HyperParameters:
@@ -26,13 +28,18 @@ class HyperParameters:
     N_ACTS: int= None
     SAVE_PATH: str = None
     DEVICE: str = None
+
+    def to_dict(self):
+        return self.__dict__
     
     def __post_init__(self):
         env = gym.make(self.ENV_NAME)
         self.N_OBS, self.N_ACTS, self.MAX_EPISODE_STEPS = env.observation_space.shape[0], env.action_space.shape[0], env.spec.max_episode_steps
         self.SAVE_PATH = os.path.join("saves", self.ENV_NAME, self.AGENT, self.EXP_NAME)
         self.CHECKPOINT_PATH = os.path.join(self.SAVE_PATH, "checkpoints")
+        self.GIF_PATH = os.path.join(self.SAVE_PATH, "gifs")
         os.makedirs(self.CHECKPOINT_PATH, exist_ok=True)
+        os.makedirs(self.GIF_PATH, exist_ok=True)
         
 
 
@@ -66,8 +73,8 @@ def save_checkpoint(
     pi_opt,
     Q_opt
 ):
-    checkpoint = dataclasses.asdict(hp)
-    checkpoint.update(metrics)
+    checkpoint = {}
+    artifact = wandb.Artifact('checkpoint', type='chkpt')
     checkpoint.update({
         "pi_state_dict": pi.state_dict(),
         "Q_state_dict": Q.state_dict(),
@@ -77,3 +84,5 @@ def save_checkpoint(
     filename = os.path.join(
         hp.CHECKPOINT_PATH, "checkpoint_{:09}.pth".format(metrics['n_grads']))
     torch.save(checkpoint, filename)
+    artifact.add_file(filename)
+    wandb.log_artifact(artifact)
