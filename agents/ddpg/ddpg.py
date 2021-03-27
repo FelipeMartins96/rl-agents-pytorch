@@ -8,14 +8,16 @@ from agents.utils import NStepTracer, OrnsteinUhlenbeckNoise, generate_gif, Hype
 import os
 from dataclasses import dataclass
 
+
 @dataclass
 class DDPGHP(HyperParameters):
     AGENT: str = "ddpg_async"
-    NOISE_SIGMA_INITIAL: float = None # Initial action noise sigma
+    NOISE_SIGMA_INITIAL: float = None  # Initial action noise sigma
     NOISE_THETA: float = None
-    NOISE_SIGMA_DECAY: float = None # Action noise sigma decay
+    NOISE_SIGMA_DECAY: float = None  # Action noise sigma decay
     NOISE_SIGMA_MIN: float = None
-    NOISE_SIGMA_GRAD_STEPS: float = None # Decay action noise every _ grad steps
+    NOISE_SIGMA_GRAD_STEPS: float = None  # Decay action noise every _ grad steps
+
 
 def data_func(
     pi,
@@ -44,10 +46,10 @@ def data_func(
                     gif_idx = gif_req_m.value
                     gif_req_m.value = -1
             if gif_idx != -1:
-                generate_gif(env=env, filepath=os.path.join(hp.SAVE_PATH,\
-                    f"gifs/{gif_idx:09d}.gif"), pi=copy.deepcopy(pi), device=device)
-            
-            
+                path = os.path.join(hp.GIF_PATH, f"{gif_idx:09d}.gif")
+                generate_gif(env=env, filepath=path,
+                             pi=copy.deepcopy(pi), device=device)
+
             done = False
             s = env.reset()
             noise.reset()
@@ -74,13 +76,12 @@ def data_func(
 
                 if done:
                     break
-                
+
                 # Set state for next step
                 s = s_next
-                
+
             info['fps'] = ep_steps / (time.perf_counter() - st_time)
             info['noise'] = noise.sigma
             info['ep_steps'] = ep_steps
             info['ep_rw'] = ep_rw
             queue_m.put(info)
-
