@@ -24,34 +24,30 @@ if __name__ == "__main__":
                         action="store_true", help="Enable cuda")
     parser.add_argument("-n", "--name", required=True,
                         help="Name of the run")
-    parser.add_argument("-e", "--env", default='SSLGoToBall-v0',
-                        help="Environment Id")
-    parser.add_argument("-p", "--num_processes", default=1,
-                        help="NUmber of rollout processes", type=int)
     args = parser.parse_args()
     device = "cuda" if args.cuda else "cpu"
 
     # Input Experiment Hyperparameters
     hp = SACHP(
         EXP_NAME=args.name,
-        ENV_NAME=args.env,
-        AGENT="sac_async",
-        N_ROLLOUT_PROCESSES=args.num_processes,
+        DEVICE=args.device,
+        ENV_NAME='VSS3v3-v0',
+        N_ROLLOUT_PROCESSES=2,
         LEARNING_RATE=0.0001,
         EXP_GRAD_RATIO=10,
         BATCH_SIZE=256,
-        GAMMA=0.98,
+        GAMMA=0.95,
         REWARD_STEPS=3,
         ALPHA=0.015,
         LOG_SIG_MAX=2,
         LOG_SIG_MIN=-20,
         EPSILON=1e-6,
-        REPLAY_SIZE=1000000,
+        REPLAY_SIZE=5000000,
         REPLAY_INITIAL=100000,
-        SAVE_FREQUENCY=25000,
-        GIF_FREQUENCY=25000
+        SAVE_FREQUENCY=50000,
+        GIF_FREQUENCY=50000
     )
-    wandb.init(project='RoboCIn-RL', name=args.name, config=hp.to_dict())
+    wandb.init(project='RoboCIn-RL', name=hp.EXP_NAME, config=hp.to_dict())
     current_time = datetime.datetime.now().strftime('%b-%d_%H-%M-%S')
     tb_path = os.path.join('runs', current_time + '_'
                            + hp.ENV_NAME + '_' + hp.EXP_NAME)
