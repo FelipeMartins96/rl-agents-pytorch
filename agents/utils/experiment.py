@@ -28,6 +28,7 @@ class HyperParameters:
     N_ACTS: int= None
     SAVE_PATH: str = None
     DEVICE: str = None
+    TOTAL_GRAD_STEPS: int = None
 
     def to_dict(self):
         return self.__dict__

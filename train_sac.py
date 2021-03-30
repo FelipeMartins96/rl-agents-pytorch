@@ -45,7 +45,8 @@ if __name__ == "__main__":
         REPLAY_SIZE=5000000,
         REPLAY_INITIAL=100000,
         SAVE_FREQUENCY=50000,
-        GIF_FREQUENCY=50000
+        GIF_FREQUENCY=50000,
+        TOTAL_GRAD_STEPS=1000000
     )
     wandb.init(project='RoboCIn-RL', name=hp.EXP_NAME, config=hp.to_dict())
     current_time = datetime.datetime.now().strftime('%b-%d_%H-%M-%S')
@@ -96,7 +97,7 @@ if __name__ == "__main__":
     last_gif = None
 
     try:
-        while True:
+        while n_grads < hp.TOTAL_GRAD_STEPS:
             metrics = {}
             st_time = time.perf_counter()
             # Collect EXP_GRAD_RATIO sample for each grad step
@@ -218,3 +219,20 @@ if __name__ == "__main__":
 
         del(exp_queue)
         del(pi)
+
+
+    finish_event.set()
+
+    if exp_queue:
+        while exp_queue.qsize() > 0:
+            exp_queue.get()
+
+    print('queue is empty')
+
+    print("Waiting for threads to finish...")
+    for p in data_proc_list:
+        p.terminate()
+        p.join()
+
+    del(exp_queue)
+    del(pi)
