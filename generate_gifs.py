@@ -14,6 +14,8 @@ import torch.nn.functional as F
 import torch.optim as optim
 from tensorboardX import SummaryWriter
 
+
+from agents.utils.gif import generate_gif
 from agents.ddpg import DDPGActor
 from agents.sac import GaussianPolicy
 
@@ -36,7 +38,7 @@ if __name__ == "__main__":
 
     checkpoint = torch.load(args.checkpoint)
 
-    env = gym.make(checkpoint['ENV_NAME'])
+    env = gym.make(hp.ENV_NAME)
 
     if checkpoint['AGENT'] == 'ddpg_async':
         pi = DDPGActor(checkpoint['N_OBS'], checkpoint['N_ACTS']).to(device)
@@ -50,28 +52,4 @@ if __name__ == "__main__":
     pi.load_state_dict(checkpoint['pi_state_dict'])
     pi.eval()
     
-    while True:
-        done = False
-        s = env.reset()
-        info = {}
-        ep_steps = 0
-        ep_rw = 0
-        st_time = time.perf_counter()
-        for i in range(checkpoint['MAX_EPISODE_STEPS']):
-            # Step the environment
-            s_v = torch.Tensor(s).to(device)
-            a = pi.get_action(s_v)
-            s_next, r, done, info = env.step(a)
-            ep_steps += 1
-            ep_rw += r
-            env.render()
-            if done:
-                break
-
-            # Set state for next step
-            s = s_next
-
-        info['fps'] = ep_steps / (time.perf_counter() - st_time)
-        info['ep_steps'] = ep_steps
-        info['ep_rw'] = ep_rw
-        print(info)
+    generate_gif(env=env, filepath=args.checkpoint.replace("pth", "gif").replace("checkpoint", "gif"), pi=pi, device=device)
