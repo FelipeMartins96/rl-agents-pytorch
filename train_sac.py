@@ -125,7 +125,7 @@ if __name__ == "__main__":
 
             if len(buffer) < hp.REPLAY_SIZE:
                 # Track buffer filling speed
-                metrics["buffer/len"] = len(buffer)
+                metrics["counters/len"] = len(buffer)
                 # Only start training after buffer is larger than initial value
                 if len(buffer) < hp.REPLAY_INITIAL:
                     continue
@@ -173,6 +173,10 @@ if __name__ == "__main__":
             metrics['speed/samples'] = new_samples/(sample_time - st_time)
             metrics['speed/grad'] = 1/(grad_time - sample_time)
             metrics['speed/total'] = 1/(grad_time - st_time)
+            metrics['counters/samples'] = n_samples
+            metrics['counters/grads'] = n_grads
+            metrics['counters/episodes'] = n_episodes
+
             
             if ep_infos:
                 for key in ep_infos[0].keys():
