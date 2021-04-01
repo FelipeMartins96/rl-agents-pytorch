@@ -40,7 +40,7 @@ def data_func(
                 if gif_req_m.value != -1:
                     gif_idx = gif_req_m.value
                     gif_req_m.value = -1
-            if gif_idx != -1:
+            if False:
                 path = os.path.join(hp.GIF_PATH, f"{gif_idx:09d}.gif")
                 generate_gif(env=env, filepath=path,
                              pi=copy.deepcopy(pi), device=device)

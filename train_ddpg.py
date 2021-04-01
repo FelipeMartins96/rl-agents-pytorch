@@ -32,8 +32,8 @@ if __name__ == "__main__":
     hp = DDPGHP(
         EXP_NAME=args.name,
         DEVICE=device,
-        ENV_NAME='VSS3v3-v0',
-        N_ROLLOUT_PROCESSES=2,
+        ENV_NAME='VSS-v0',
+        N_ROLLOUT_PROCESSES=4,
         LEARNING_RATE=0.0001,
         EXP_GRAD_RATIO=10,
         BATCH_SIZE=256,
@@ -96,6 +96,7 @@ if __name__ == "__main__":
     try:
         while n_grads < hp.TOTAL_GRAD_STEPS:
             metrics = {}
+            ep_infos = list()
             st_time = time.perf_counter()
             # Collect EXP_GRAD_RATIO sample for each grad step
             new_samples = 0
@@ -108,10 +109,9 @@ if __name__ == "__main__":
 
                 # Dict is returned with end of episode info
                 if isinstance(safe_exp, dict):
-                    for key, value in safe_exp.items():
-                        logs = {"ep_info/"+key: value for key,
+                    logs = {"ep_info/"+key: value for key,
                             value in safe_exp.items() if 'truncated' not in key}
-                    wandb.log(logs)
+                    ep_infos.append(logs)
                     n_episodes += 1
                 else:
                     buffer.add(safe_exp)
@@ -121,7 +121,7 @@ if __name__ == "__main__":
 
             if len(buffer) < hp.REPLAY_SIZE:
                 # Track buffer filling speed
-                wandb.log({"buffer/len": len(buffer)})
+                metrics["counters/len"] = len(buffer)
                 # Only start training after buffer is larger than initial value
                 if len(buffer) < hp.REPLAY_INITIAL:
                     continue
@@ -162,6 +162,13 @@ if __name__ == "__main__":
             metrics['speed/samples'] = new_samples/(sample_time - st_time)
             metrics['speed/grad'] = 1/(grad_time - sample_time)
             metrics['speed/total'] = 1/(grad_time - st_time)
+            metrics['counters/samples'] = n_samples
+            metrics['counters/grads'] = n_grads
+            metrics['counters/episodes'] = n_episodes
+
+            if ep_infos:
+                for key in ep_infos[0].keys():
+                    metrics[key] = np.mean([info[key] for info in ep_infos])
 
             # Log metrics
             wandb.log(metrics)
