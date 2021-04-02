@@ -216,7 +216,6 @@ if __name__ == "__main__":
         finish_event.set()
 
     finally:
-        wandb.finish()
         if exp_queue:
             while exp_queue.qsize() > 0:
                 exp_queue.get()
