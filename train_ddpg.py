@@ -227,17 +227,3 @@ if __name__ == "__main__":
         del(pi)
 
         finish_event.set()
-
-    if exp_queue:
-        while exp_queue.qsize() > 0:
-            exp_queue.get()
-
-    print('queue is empty')
-
-    print("Waiting for threads to finish...")
-    for p in data_proc_list:
-        p.terminate()
-        p.join()
-
-    del(exp_queue)
-    del(pi)

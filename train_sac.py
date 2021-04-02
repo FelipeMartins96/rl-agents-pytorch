@@ -33,7 +33,7 @@ if __name__ == "__main__":
         EXP_NAME=args.name,
         DEVICE=device,
         ENV_NAME='VSS-v0',
-        N_ROLLOUT_PROCESSES=1,
+        N_ROLLOUT_PROCESSES=4,
         LEARNING_RATE=0.0001,
         EXP_GRAD_RATIO=10,
         BATCH_SIZE=256,
@@ -216,6 +216,7 @@ if __name__ == "__main__":
         finish_event.set()
 
     finally:
+        wandb.finish()
         if exp_queue:
             while exp_queue.qsize() > 0:
                 exp_queue.get()
@@ -230,19 +231,4 @@ if __name__ == "__main__":
         del(exp_queue)
         del(pi)
 
-
-    finish_event.set()
-
-    if exp_queue:
-        while exp_queue.qsize() > 0:
-            exp_queue.get()
-
-    print('queue is empty')
-
-    print("Waiting for threads to finish...")
-    for p in data_proc_list:
-        p.terminate()
-        p.join()
-
-    del(exp_queue)
-    del(pi)
+        finish_event.set()
