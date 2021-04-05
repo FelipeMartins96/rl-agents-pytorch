@@ -36,14 +36,15 @@ def data_func(
         while not finish_event_m.is_set():
             # Check for generate gif request
             gif_idx = -1
-            with gif_req_m.get_lock():
-                if gif_req_m.value != -1:
-                    gif_idx = gif_req_m.value
-                    gif_req_m.value = -1
-            if False:
-                path = os.path.join(hp.GIF_PATH, f"{gif_idx:09d}.gif")
-                generate_gif(env=env, filepath=path,
-                             pi=copy.deepcopy(pi), device=device)
+            
+            # with gif_req_m.get_lock():
+            #     if gif_req_m.value != -1:
+            #         gif_idx = gif_req_m.value
+            #         gif_req_m.value = -1
+            # if gif_idx != -1:
+            #     path = os.path.join(hp.GIF_PATH, f"{gif_idx:09d}.gif")
+            #     generate_gif(env=env, filepath=path,
+            #                  pi=copy.deepcopy(pi), device=device)
 
             done = False
             s = env.reset()

@@ -43,11 +43,11 @@ if __name__ == "__main__":
         LOG_SIG_MAX=2,
         LOG_SIG_MIN=-20,
         EPSILON=1e-6,
-        REPLAY_SIZE=5000000,
-        REPLAY_INITIAL=512,
+        REPLAY_SIZE=1000000,
+        REPLAY_INITIAL=100000,
         SAVE_FREQUENCY=50000,
         GIF_FREQUENCY=50000,
-        TOTAL_GRAD_STEPS=1000000
+        TOTAL_GRAD_STEPS=700000
     )
     wandb.init(project='RoboCIn-RL', name=hp.EXP_NAME, config=hp.to_dict())
     current_time = datetime.datetime.now().strftime('%b-%d_%H-%M-%S')
@@ -123,12 +123,12 @@ if __name__ == "__main__":
             n_samples += new_samples
             sample_time = time.perf_counter()
 
-            if len(buffer) < hp.REPLAY_SIZE:
-                # Track buffer filling speed
-                metrics["counters/len"] = len(buffer)
-                # Only start training after buffer is larger than initial value
-                if len(buffer) < hp.REPLAY_INITIAL:
-                    continue
+            # if len(buffer) < hp.REPLAY_SIZE:
+            # Track buffer filling speed
+            metrics["counters/len"] = len(buffer)
+            # Only start training after buffer is larger than initial value
+            if len(buffer) < hp.REPLAY_INITIAL:
+                continue
 
             # Sample a batch and load it as a tensor on device
             batch = buffer.sample(hp.BATCH_SIZE)
@@ -184,20 +184,20 @@ if __name__ == "__main__":
 
             # Log metrics
             wandb.log(metrics)
-            if n_grads % hp.SAVE_FREQUENCY == 0:
-                save_checkpoint(
-                    hp=hp,
-                    metrics={
-                        'alpha': alpha,
-                        'n_samples': n_samples,
-                        'n_grads': n_grads,
-                        'n_episodes': n_episodes
-                    },
-                    pi=pi,
-                    Q=Q,
-                    pi_opt=pi_opt,
-                    Q_opt=Q_opt
-                )
+            # if n_grads % hp.SAVE_FREQUENCY == 0:
+            #     save_checkpoint(
+            #         hp=hp,
+            #         metrics={
+            #             'alpha': alpha,
+            #             'n_samples': n_samples,
+            #             'n_grads': n_grads,
+            #             'n_episodes': n_episodes
+            #         },
+            #         pi=pi,
+            #         Q=Q,
+            #         pi_opt=pi_opt,
+            #         Q_opt=Q_opt
+            #     )
 
             if hp.GIF_FREQUENCY and n_grads % hp.GIF_FREQUENCY == 0 and hp.GIF_FREQUENCY != 0:
                 gif_req_m.value = n_grads
