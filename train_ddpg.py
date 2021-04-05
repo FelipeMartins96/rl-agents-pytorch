@@ -180,20 +180,20 @@ if __name__ == "__main__":
                 with sigma_m.get_lock():
                     sigma_m.value *= hp.NOISE_SIGMA_DECAY
 
-            # if n_grads % hp.SAVE_FREQUENCY == 0:
-            #     save_checkpoint(
-            #         hp=hp,
-            #         metrics={
-            #             'noise_sigma': sigma_m.value,
-            #             'n_samples': n_samples,
-            #             'n_episodes': n_episodes,   
-            #             'n_grads': n_grads,
-            #         },
-            #         pi=pi,
-            #         Q=Q,
-            #         pi_opt=pi_opt,
-            #         Q_opt=Q_opt
-            #     )
+            if n_grads % hp.SAVE_FREQUENCY == 0:
+                save_checkpoint(
+                    hp=hp,
+                    metrics={
+                        'noise_sigma': sigma_m.value,
+                        'n_samples': n_samples,
+                        'n_episodes': n_episodes,   
+                        'n_grads': n_grads,
+                    },
+                    pi=pi,
+                    Q=Q,
+                    pi_opt=pi_opt,
+                    Q_opt=Q_opt
+                )
 
             if hp.GIF_FREQUENCY and n_grads % hp.GIF_FREQUENCY == 0 and hp.GIF_FREQUENCY != 0:
                 gif_req_m.value = n_grads

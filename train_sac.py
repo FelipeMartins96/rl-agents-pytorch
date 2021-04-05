@@ -32,7 +32,7 @@ if __name__ == "__main__":
     hp = SACHP(
         EXP_NAME=args.name,
         DEVICE=device,
-        ENV_NAME='VSS-v0',
+        ENV_NAME='SSLGoToBallIR-v1',
         N_ROLLOUT_PROCESSES=4,
         LEARNING_RATE=0.0001,
         EXP_GRAD_RATIO=10,
@@ -49,7 +49,8 @@ if __name__ == "__main__":
         GIF_FREQUENCY=50000,
         TOTAL_GRAD_STEPS=700000
     )
-    wandb.init(project='RoboCIn-RL', name=hp.EXP_NAME, config=hp.to_dict())
+    wandb.init(project='RoboCIn-RL', entity='goncamateus',
+               name=hp.EXP_NAME, config=hp.to_dict())
     current_time = datetime.datetime.now().strftime('%b-%d_%H-%M-%S')
     tb_path = os.path.join('runs', current_time + '_'
                            + hp.ENV_NAME + '_' + hp.EXP_NAME)
@@ -177,27 +178,26 @@ if __name__ == "__main__":
             metrics['counters/grads'] = n_grads
             metrics['counters/episodes'] = n_episodes
 
-            
             if ep_infos:
                 for key in ep_infos[0].keys():
                     metrics[key] = np.mean([info[key] for info in ep_infos])
 
             # Log metrics
             wandb.log(metrics)
-            # if n_grads % hp.SAVE_FREQUENCY == 0:
-            #     save_checkpoint(
-            #         hp=hp,
-            #         metrics={
-            #             'alpha': alpha,
-            #             'n_samples': n_samples,
-            #             'n_grads': n_grads,
-            #             'n_episodes': n_episodes
-            #         },
-            #         pi=pi,
-            #         Q=Q,
-            #         pi_opt=pi_opt,
-            #         Q_opt=Q_opt
-            #     )
+            if n_grads % hp.SAVE_FREQUENCY == 0:
+                save_checkpoint(
+                    hp=hp,
+                    metrics={
+                        'alpha': alpha,
+                        'n_samples': n_samples,
+                        'n_grads': n_grads,
+                        'n_episodes': n_episodes
+                    },
+                    pi=pi,
+                    Q=Q,
+                    pi_opt=pi_opt,
+                    Q_opt=Q_opt
+                )
 
             if hp.GIF_FREQUENCY and n_grads % hp.GIF_FREQUENCY == 0 and hp.GIF_FREQUENCY != 0:
                 gif_req_m.value = n_grads
