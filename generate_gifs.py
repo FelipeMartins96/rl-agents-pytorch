@@ -12,7 +12,6 @@ import torch
 import torch.multiprocessing as mp
 import torch.nn.functional as F
 import torch.optim as optim
-from tensorboardX import SummaryWriter
 
 
 from agents.utils.gif import generate_gif
@@ -38,7 +37,7 @@ if __name__ == "__main__":
 
     checkpoint = torch.load(args.checkpoint)
 
-    env = gym.make(hp.ENV_NAME)
+    env = gym.make(checkpoint['ENV_NAME'])
 
     if checkpoint['AGENT'] == 'ddpg_async':
         pi = DDPGActor(checkpoint['N_OBS'], checkpoint['N_ACTS']).to(device)
