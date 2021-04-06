@@ -1,31 +1,16 @@
 import argparse
 import os
-import copy
-import datetime
-import dataclasses
 import time
 
 import gym
 import numpy as np
 import rc_gym
 import torch
-import torch.multiprocessing as mp
-import torch.nn.functional as F
-import torch.optim as optim
-from tensorboardX import SummaryWriter
 
 from agents.ddpg import DDPGActor
 from agents.sac import GaussianPolicy
 
-
-def get_env_specs(env_name):
-    env = gym.make(env_name)
-    return env.observation_space.shape[0], env.action_space.shape[0], env.spec.max_episode_steps
-
-
 if __name__ == "__main__":
-    mp.set_start_method('spawn')
-    os.environ['OMP_NUM_THREADS'] = "1"
     parser = argparse.ArgumentParser()
     parser.add_argument("--cuda", default=False,
                         action="store_true", help="Enable cuda")
@@ -42,14 +27,14 @@ if __name__ == "__main__":
         pi = DDPGActor(checkpoint['N_OBS'], checkpoint['N_ACTS']).to(device)
     elif checkpoint['AGENT'] == 'sac_async':
         pi = GaussianPolicy(checkpoint['N_OBS'], checkpoint['N_ACTS'],
-                        checkpoint['LOG_SIG_MIN'],
-                        checkpoint['LOG_SIG_MAX'], checkpoint['EPSILON']).to(device)
+                            checkpoint['LOG_SIG_MIN'],
+                            checkpoint['LOG_SIG_MAX'], checkpoint['EPSILON']).to(device)
     else:
         raise AssertionError
 
     pi.load_state_dict(checkpoint['pi_state_dict'])
     pi.eval()
-    
+
     while True:
         done = False
         s = env.reset()

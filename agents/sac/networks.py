@@ -4,12 +4,6 @@ import torch
 import torch.nn as nn
 from torch.distributions import Normal
 import torch.nn.functional as F
-from agents.utils.experiment import unpack_batch
-
-LOG_SIG_MAX = 2
-LOG_SIG_MIN = -20
-epsilon = 1e-6
-
 
 # Initialize Policy weights
 def weights_init_(m):

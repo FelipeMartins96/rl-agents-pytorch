@@ -25,6 +25,8 @@ if __name__ == "__main__":
                         action="store_true", help="Enable cuda")
     parser.add_argument("-n", "--name", required=True,
                         help="Name of the run")
+    parser.add_argument("-e", "--env", required=True,
+                        help="Name of the gym environment")
     args = parser.parse_args()
     device = "cuda" if args.cuda else "cpu"
 
@@ -32,7 +34,7 @@ if __name__ == "__main__":
     hp = DDPGHP(
         EXP_NAME=args.name,
         DEVICE=device,
-        ENV_NAME='SSLGoToBallIR-v1',
+        ENV_NAME=args.env,
         N_ROLLOUT_PROCESSES=4,
         LEARNING_RATE=0.0001,
         EXP_GRAD_RATIO=10,
@@ -46,9 +48,9 @@ if __name__ == "__main__":
         NOISE_SIGMA_GRAD_STEPS=3000,
         REPLAY_SIZE=1000000,
         REPLAY_INITIAL=100000,
-        SAVE_FREQUENCY=50000,
-        GIF_FREQUENCY=50000,
-        TOTAL_GRAD_STEPS=700000
+        SAVE_FREQUENCY=0,
+        GIF_FREQUENCY=0,
+        TOTAL_GRAD_STEPS=1000000
     )
     wandb.init(project='RoboCIn-RL', name=hp.EXP_NAME, config=hp.to_dict())
     current_time = datetime.datetime.now().strftime('%b-%d_%H-%M-%S')
@@ -60,7 +62,7 @@ if __name__ == "__main__":
 
     # Playing
     pi.share_memory()
-    exp_queue = mp.Queue(maxsize=hp.BATCH_SIZE)
+    exp_queue = mp.Queue(maxsize=hp.EXP_GRAD_RATIO)
     finish_event = mp.Event()
     sigma_m = mp.Value('f', hp.NOISE_SIGMA_INITIAL)
     gif_req_m = mp.Value('i', -1)
@@ -119,9 +121,7 @@ if __name__ == "__main__":
             n_samples += new_samples
             sample_time = time.perf_counter()
 
-            # if len(buffer) < hp.REPLAY_SIZE:
-            #     # Track buffer filling speed
-            metrics["counters/len"] = len(buffer)
+
             # Only start training after buffer is larger than initial value
             if len(buffer) < hp.REPLAY_INITIAL:
                 continue
@@ -165,6 +165,7 @@ if __name__ == "__main__":
             metrics['counters/samples'] = n_samples
             metrics['counters/grads'] = n_grads
             metrics['counters/episodes'] = n_episodes
+            metrics["counters/buffer_len"] = len(buffer)
 
             if ep_infos:
                 for key in ep_infos[0].keys():
@@ -180,7 +181,7 @@ if __name__ == "__main__":
                 with sigma_m.get_lock():
                     sigma_m.value *= hp.NOISE_SIGMA_DECAY
 
-            if n_grads % hp.SAVE_FREQUENCY == 0:
+            if hp.SAVE_FREQUENCY and n_grads % hp.SAVE_FREQUENCY == 0:
                 save_checkpoint(
                     hp=hp,
                     metrics={
@@ -195,17 +196,8 @@ if __name__ == "__main__":
                     Q_opt=Q_opt
                 )
 
-            if hp.GIF_FREQUENCY and n_grads % hp.GIF_FREQUENCY == 0 and hp.GIF_FREQUENCY != 0:
+            if hp.GIF_FREQUENCY and n_grads % hp.GIF_FREQUENCY == 0:
                 gif_req_m.value = n_grads
-            
-            gif_paths = os.listdir(hp.GIF_PATH)
-            gif_paths.sort()
-            if gif_paths and last_gif != gif_paths[-1]:
-                path = os.path.join(hp.GIF_PATH, gif_paths[-1])
-                wandb.log({"video": wandb.Video(path,
-                                                fps=40,
-                                                format="gif")})
-                last_gif = gif_paths[-1]
 
     except KeyboardInterrupt:
         print("...Finishing...")

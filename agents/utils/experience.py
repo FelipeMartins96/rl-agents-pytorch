@@ -96,4 +96,5 @@ class ExperienceReplayBuffer:
         return [self.buffer[key] for key in keys]
 
     def add(self, sample):
+        assert(isinstance(sample, ExperienceFirstLast))
         self.buffer.append(sample)
