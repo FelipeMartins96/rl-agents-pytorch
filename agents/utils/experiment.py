@@ -74,8 +74,8 @@ def save_checkpoint(
     pi_opt,
     Q_opt
 ):
-    checkpoint = {}
-    artifact = wandb.Artifact('checkpoint', type='chkpt')
+    checkpoint = dataclasses.asdict(hp)
+    checkpoint.update(metrics)
     checkpoint.update({
         "pi_state_dict": pi.state_dict(),
         "Q_state_dict": Q.state_dict(),
@@ -85,5 +85,3 @@ def save_checkpoint(
     filename = os.path.join(
         hp.CHECKPOINT_PATH, "checkpoint_{:09}.pth".format(metrics['n_grads']))
     torch.save(checkpoint, filename)
-    artifact.add_file(filename)
-    wandb.log_artifact(artifact)

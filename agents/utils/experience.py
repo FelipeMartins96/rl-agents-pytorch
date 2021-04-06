@@ -78,7 +78,7 @@ class NStepTracer():
 
 class ExperienceReplayBuffer:
     def __init__(self, buffer_size):
-        self.buffer = []
+        self.buffer = deque([], maxlen=buffer_size)
         self.capacity = buffer_size
         self.pos = 0
 
@@ -96,8 +96,5 @@ class ExperienceReplayBuffer:
         return [self.buffer[key] for key in keys]
 
     def add(self, sample):
-        if len(self.buffer) < self.capacity:
-            self.buffer.append(sample)
-        else:
-            self.buffer[self.pos] = sample
-        self.pos = (self.pos + 1) % self.capacity
+        assert(isinstance(sample, ExperienceFirstLast))
+        self.buffer.append(sample)
