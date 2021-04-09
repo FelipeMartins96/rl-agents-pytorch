@@ -45,10 +45,10 @@ if __name__ == "__main__":
         LOG_SIG_MAX=2,
         LOG_SIG_MIN=-20,
         EPSILON=1e-6,
-        REPLAY_SIZE=5000,
-        REPLAY_INITIAL=4900,
-        SAVE_FREQUENCY=0,
-        GIF_FREQUENCY=0,
+        REPLAY_SIZE=1000000,
+        REPLAY_INITIAL=100000,
+        SAVE_FREQUENCY=100000,
+        GIF_FREQUENCY=100000,
         TOTAL_GRAD_STEPS=1000000
     )
     wandb.init(project='RoboCIn-RL', entity='goncamateus',
