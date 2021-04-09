@@ -95,7 +95,7 @@ class ExperienceReplayBuffer:
         return [self.buffer[key] for key in keys]
 
     def add(self, sample):
-        assert(isinstance(sample, ExperienceFirstLast))
+        # assert(isinstance(sample, ExperienceFirstLast))
         if len(self.buffer) < self.capacity:
             self.buffer.append(sample)
         else:

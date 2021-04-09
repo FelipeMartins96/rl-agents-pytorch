@@ -41,6 +41,8 @@ class HyperParameters:
         self.GIF_PATH = os.path.join(self.SAVE_PATH, "gifs")
         os.makedirs(self.CHECKPOINT_PATH, exist_ok=True)
         os.makedirs(self.GIF_PATH, exist_ok=True)
+        self.action_space = env.action_space
+        self.observation_space = env.observation_space
         
 
 
