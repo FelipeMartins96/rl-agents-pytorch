@@ -80,10 +80,11 @@ def data_func(
 def loss_sac(alpha, gamma, batch, crt_net, act_net,
              tgt_crt_net, device):
 
-    state_batch, action_batch, reward_batch,\
-        mask_batch, next_state_batch = unpack_batch(batch, device)
-
-    reward_batch = reward_batch.unsqueeze_(1)
+    state_batch = batch.observations
+    action_batch = batch.actions
+    reward_batch = batch.rewards
+    mask_batch = batch.dones.bool()
+    next_state_batch = batch.next_observations
 
     with torch.no_grad():
         next_state_action, next_state_log_pi, _ = act_net.sample(
