@@ -7,7 +7,7 @@ def generate_gif(
     env, 
     filepath, 
     pi, 
-    device, 
+    hp, 
     max_episode_steps=1200, 
     resize_to=None, 
     duration=25
@@ -29,7 +29,15 @@ def generate_gif(
     frames = []
     s = env.reset()
     for t in range(max_episode_steps):
-        a = pi.get_action(torch.Tensor(s).to(device))
+        if hp.MULTI_AGENT:
+            a = list()
+            for i in range(hp.N_AGENTS):
+                s_v = torch.Tensor(s[i]).to(hp.DEVICE)
+                a.append(pi[i].get_action(s_v))
+            a = np.array(a, dtype=np.float)
+        else:
+            s_v = torch.Tensor(s).to(hp.DEVICE)
+            a = pi.get_action(s_v)
         s_next, r, done, info = env.step(a)
         # store frame
         frame = env.render(mode='rgb_array')

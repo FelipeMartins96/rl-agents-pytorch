@@ -35,7 +35,7 @@ if __name__ == "__main__":
         EXP_NAME=args.name,
         DEVICE=device,
         ENV_NAME=args.env,
-        N_ROLLOUT_PROCESSES=1,
+        N_ROLLOUT_PROCESSES=4,
         LEARNING_RATE=0.0001,
         EXP_GRAD_RATIO=10,
         BATCH_SIZE=256,
@@ -47,7 +47,7 @@ if __name__ == "__main__":
         EPSILON=1e-6,
         REPLAY_SIZE=1000000,
         REPLAY_INITIAL=100000,
-        SAVE_FREQUENCY=0,
+        SAVE_FREQUENCY=100000,
         GIF_FREQUENCY=100000,
         TOTAL_GRAD_STEPS=1000000,
         MULTI_AGENT=True

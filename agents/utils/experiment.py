@@ -34,15 +34,17 @@ class HyperParameters:
 
     def to_dict(self):
         return self.__dict__
-    
+
     def __post_init__(self):
         env = gym.make(self.ENV_NAME)
-        self.N_OBS, self.N_ACTS, self.MAX_EPISODE_STEPS = env.observation_space.shape[0], env.action_space.shape[0], env.spec.max_episode_steps
+        self.N_OBS, self.N_ACTS, self.MAX_EPISODE_STEPS = env.observation_space.shape[
+            0], env.action_space.shape[0], env.spec.max_episode_steps
         if self.MULTI_AGENT:
             self.N_AGENTS = env.action_space.shape[0]
             self.N_ACTS = env.action_space.shape[1]
             self.N_OBS = env.observation_space.shape[1]
-        self.SAVE_PATH = os.path.join("saves", self.ENV_NAME, self.AGENT, self.EXP_NAME)
+        self.SAVE_PATH = os.path.join(
+            "saves", self.ENV_NAME, self.AGENT, self.EXP_NAME)
         self.CHECKPOINT_PATH = os.path.join(self.SAVE_PATH, "checkpoints")
         self.GIF_PATH = os.path.join(self.SAVE_PATH, "gifs")
         os.makedirs(self.CHECKPOINT_PATH, exist_ok=True)
@@ -76,6 +78,7 @@ def unpack_batch(
     dones_t = torch.BoolTensor(dones).to(device, non_blocking=True)
     return states_v, actions_v, rewards_v, dones_t, last_states_v
 
+
 def save_checkpoint(
     hp,
     metrics,
@@ -86,12 +89,21 @@ def save_checkpoint(
 ):
     checkpoint = dataclasses.asdict(hp)
     checkpoint.update(metrics)
-    checkpoint.update({
-        "pi_state_dict": pi.state_dict(),
-        "Q_state_dict": Q.state_dict(),
-        "pi_opt_state_dict": pi_opt.state_dict(),
-        "Q_opt_state_dict": Q_opt.state_dict(),
-    })
+    if hp.MULTI_AGENT:
+        agents = {f'agent_{i}': {
+            "pi_state_dict": pi[i].state_dict(),
+            "Q_state_dict": Q[i].state_dict(),
+            "pi_opt_state_dict": pi_opt[i].state_dict(),
+            "Q_opt_state_dict": Q_opt[i].state_dict(),
+        } for i in range(hp.N_AGENTS)}
+        checkpoint.update(agents)
+    else:
+        checkpoint.update({
+            "pi_state_dict": pi.state_dict(),
+            "Q_state_dict": Q.state_dict(),
+            "pi_opt_state_dict": pi_opt.state_dict(),
+            "Q_opt_state_dict": Q_opt.state_dict(),
+        })
     filename = os.path.join(
         hp.CHECKPOINT_PATH, "checkpoint_{:09}.pth".format(metrics['n_grads']))
     torch.save(checkpoint, filename)
