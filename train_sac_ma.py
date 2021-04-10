@@ -46,7 +46,7 @@ if __name__ == "__main__":
         LOG_SIG_MIN=-20,
         EPSILON=1e-6,
         REPLAY_SIZE=1000000,
-        REPLAY_INITIAL=512,
+        REPLAY_INITIAL=100000,
         SAVE_FREQUENCY=0,
         GIF_FREQUENCY=100000,
         TOTAL_GRAD_STEPS=1000000,
@@ -145,7 +145,7 @@ if __name__ == "__main__":
                 # Sample a batch and load it as a tensor on device
                 batch = buffer[i].sample(hp.BATCH_SIZE)
                 pi_loss, Q_loss1, Q_loss2, log_pi = loss_sac(alpha[i],
-                                                            hp.GAMMA**hp.REWARD_STEPS,
+                                                            hp.GAMMA,
                                                             batch, Q[i], pi[i],
                                                             tgt_Q[i], device)
 
