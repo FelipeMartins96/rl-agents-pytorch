@@ -48,7 +48,7 @@ def data_func(
             if gif_idx != -1:
                 path = os.path.join(hp.GIF_PATH, f"{gif_idx:09d}.gif")
                 generate_gif(env=env, filepath=path,
-                             pi=copy.deepcopy(pi), device=device)
+                             pi=copy.deepcopy(pi), hp=hp)
 
             done = False
             s = env.reset()
