@@ -35,7 +35,7 @@ if __name__ == "__main__":
         EXP_NAME=args.name,
         DEVICE=device,
         ENV_NAME=args.env,
-        N_ROLLOUT_PROCESSES=4,
+        N_ROLLOUT_PROCESSES=2,
         LEARNING_RATE=0.0001,
         EXP_GRAD_RATIO=10,
         BATCH_SIZE=256,
@@ -60,8 +60,8 @@ if __name__ == "__main__":
 
     # Actor-Critic
     pi = [GaussianPolicy(hp.N_OBS, hp.N_ACTS,
-                        hp.LOG_SIG_MIN,
-                        hp.LOG_SIG_MAX, hp.EPSILON).to(device)]*hp.N_AGENTS
+                         hp.LOG_SIG_MIN,
+                         hp.LOG_SIG_MAX, hp.EPSILON).to(device)]*hp.N_AGENTS
     Q = [QNetwork(hp.N_OBS, hp.N_ACTS).to(device)]*hp.N_AGENTS
     # Entropy
     alpha = [hp.ALPHA]*hp.N_AGENTS
@@ -91,14 +91,17 @@ if __name__ == "__main__":
 
     # Training
     tgt_Q = [TargetCritic(Q[i]) for i in range(hp.N_AGENTS)]
-    pi_opt = [optim.Adam(pi[i].parameters(), lr=hp.LEARNING_RATE) for i in range(hp.N_AGENTS)]
-    Q_opt = [optim.Adam(Q[i].parameters(), lr=hp.LEARNING_RATE) for i in range(hp.N_AGENTS)]
-    alpha_optim = [optim.Adam([log_alpha[i]], lr=hp.LEARNING_RATE) for i in range(hp.N_AGENTS)]
+    pi_opt = [optim.Adam(pi[i].parameters(), lr=hp.LEARNING_RATE)
+              for i in range(hp.N_AGENTS)]
+    Q_opt = [optim.Adam(Q[i].parameters(), lr=hp.LEARNING_RATE)
+             for i in range(hp.N_AGENTS)]
+    alpha_optim = [optim.Adam([log_alpha[i]], lr=hp.LEARNING_RATE)
+                   for i in range(hp.N_AGENTS)]
     buffer = [ReplayBuffer(buffer_size=hp.REPLAY_SIZE,
-                          observation_space=hp.observation_space,
-                          action_space=hp.action_space,
-                          device=hp.DEVICE
-                          )]*hp.N_AGENTS
+                           observation_space=hp.observation_space,
+                           action_space=hp.action_space,
+                           device=hp.DEVICE
+                           )]*hp.N_AGENTS
     n_grads = 0
     n_samples = 0
     n_episodes = 0
@@ -140,18 +143,19 @@ if __name__ == "__main__":
             # Only start training after buffer is larger than initial value
             if buffer[0].size() < hp.REPLAY_INITIAL:
                 continue
-            
+
             for i in range(hp.N_AGENTS):
                 # Sample a batch and load it as a tensor on device
                 batch = buffer[i].sample(hp.BATCH_SIZE)
                 pi_loss, Q_loss1, Q_loss2, log_pi = loss_sac(alpha[i],
-                                                            hp.GAMMA,
-                                                            batch, Q[i], pi[i],
-                                                            tgt_Q[i], device)
+                                                             hp.GAMMA,
+                                                             batch, Q[i], pi[i],
+                                                             tgt_Q[i], device)
 
                 # train Entropy parameter
 
-                alpha_loss = -(log_alpha[i] * (log_pi + target_entropy).detach())
+                alpha_loss = - \
+                    (log_alpha[i] * (log_pi + target_entropy).detach())
                 alpha_loss = alpha_loss.mean()
 
                 alpha_optim[i].zero_grad()
@@ -179,6 +183,12 @@ if __name__ == "__main__":
 
                 # Sync target networks
                 tgt_Q[i].sync(alpha=1 - 1e-3)
+                if ep_infos:
+                    for key in ep_infos[0].keys():
+                        if isinstance(ep_infos[0][key], dict):
+                            for inner_key in ep_infos[0][key].keys():
+                                metrics[f"ep_info/agent_{i}/{inner_key}"] = np.mean(
+                                    [info[key][inner_key] for info in ep_infos])
 
             n_grads += 1
             grad_time = time.perf_counter()
@@ -189,10 +199,11 @@ if __name__ == "__main__":
             metrics['counters/grads'] = n_grads
             metrics['counters/episodes'] = n_episodes
             metrics["counters/buffer_len"] = buffer[0].size()
-
             if ep_infos:
                 for key in ep_infos[0].keys():
-                    metrics[key] = np.mean([info[key] for info in ep_infos])
+                    if not isinstance(ep_infos[0][key], dict):
+                        metrics[key] = np.mean([info[key]
+                                                for info in ep_infos])
 
             # Log metrics
             wandb.log(metrics)

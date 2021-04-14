@@ -64,7 +64,8 @@ def data_func(
                 if hp.MULTI_AGENT:
                     a = list()
                     for i in range(hp.N_AGENTS):
-                        s_v = torch.Tensor(s[i]).to(device)
+                        in_state = np.array(s[i], dtype=np.float)
+                        s_v = torch.Tensor(in_state).to(device)
                         a.append(pi[i].get_action(s_v))
                     a = np.array(a, dtype=np.float)
                 else:
@@ -75,7 +76,7 @@ def data_func(
                 ep_steps += 1
                 if hp.MULTI_AGENT:
                     for i in range(hp.N_AGENTS):
-                        ep_rw[i] += r[i]
+                        ep_rw[i] += r[f'robot_{i}']
                 else:
                     ep_rw += r
                 # Trace NStep rewards and add to mp queue
@@ -85,7 +86,7 @@ def data_func(
                         kwargs = {
                             'state': s[i],
                             'action': a[i],
-                            'reward': r[i],
+                            'reward': r[f'robot_{i}'],
                             'last_state': s_next[i]
                         }
                         exp.append(ExperienceFirstLast(**kwargs))
