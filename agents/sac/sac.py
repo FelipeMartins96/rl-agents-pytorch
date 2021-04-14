@@ -64,8 +64,7 @@ def data_func(
                 if hp.MULTI_AGENT:
                     a = list()
                     for i in range(hp.N_AGENTS):
-                        in_state = np.array(s[i], dtype=np.float)
-                        s_v = torch.Tensor(in_state).to(device)
+                        s_v = torch.Tensor(s[i]).to(device)
                         a.append(pi[i].get_action(s_v))
                     a = np.array(a, dtype=np.float)
                 else:
