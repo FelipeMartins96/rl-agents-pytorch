@@ -1,5 +1,6 @@
 import argparse
 import copy
+import dataclasses
 import datetime
 import os
 import time
@@ -7,15 +8,14 @@ import time
 import gym
 import numpy as np
 import rc_gym
-import torch
 import torch.multiprocessing as mp
 import torch.nn.functional as F
 import torch.optim as optim
 
 import wandb
-from agents.sac import (SACHP, GaussianPolicy, QNetwork, TargetCritic,
-                        data_func, loss_sac)
-from agents.utils import ReplayBuffer, save_checkpoint
+from agents.ddpg import (DDPGHP, DDPGActor, DDPGCritic, TargetActor,
+                         TargetCritic, data_func)
+from agents.utils import ReplayBuffer, save_checkpoint, unpack_batch, ExperienceFirstLast
 
 if __name__ == "__main__":
     mp.set_start_method('spawn')
@@ -31,25 +31,26 @@ if __name__ == "__main__":
     device = "cuda" if args.cuda else "cpu"
 
     # Input Experiment Hyperparameters
-    hp = SACHP(
+    hp = DDPGHP(
         EXP_NAME=args.name,
         DEVICE=device,
         ENV_NAME=args.env,
-        N_ROLLOUT_PROCESSES=4,
+        N_ROLLOUT_PROCESSES=1,
         LEARNING_RATE=0.0001,
         EXP_GRAD_RATIO=10,
         BATCH_SIZE=256,
         GAMMA=0.95,
         REWARD_STEPS=3,
-        ALPHA=0.015,
-        LOG_SIG_MAX=2,
-        LOG_SIG_MIN=-20,
-        EPSILON=1e-6,
+        NOISE_SIGMA_INITIAL=0.8,
+        NOISE_THETA=0.15,
+        NOISE_SIGMA_DECAY=0.99,
+        NOISE_SIGMA_MIN=0.15,
+        NOISE_SIGMA_GRAD_STEPS=3000,
         REPLAY_SIZE=1000000,
         REPLAY_INITIAL=100000,
         SAVE_FREQUENCY=100000,
         GIF_FREQUENCY=100000,
-        TOTAL_GRAD_STEPS=1000000,
+        TOTAL_GRAD_STEPS=2000000,
         MULTI_AGENT=True
     )
     wandb.init(project='RoboCIn-RL', entity='goncamateus',
@@ -58,20 +59,14 @@ if __name__ == "__main__":
     tb_path = os.path.join('runs', current_time + '_'
                            + hp.ENV_NAME + '_' + hp.EXP_NAME)
 
-    # Actor-Critic
-    pi = GaussianPolicy(hp.N_OBS, hp.N_ACTS,
-                        hp.LOG_SIG_MIN,
-                        hp.LOG_SIG_MAX, hp.EPSILON).to(device)
-    Q = QNetwork(hp.N_OBS, hp.N_ACTS).to(device)
-    # Entropy
-    alpha = hp.ALPHA
-    target_entropy = -torch.prod(torch.Tensor(hp.N_ACTS).to(device)).item()
-    log_alpha = torch.zeros(1, requires_grad=True, device=device)
+    pi = DDPGActor(hp.N_OBS, hp.N_ACTS).to(device)
+    Q = DDPGCritic(hp.N_OBS, hp.N_ACTS).to(device)
 
     # Playing
     pi.share_memory()
     exp_queue = mp.Queue(maxsize=hp.EXP_GRAD_RATIO)
     finish_event = mp.Event()
+    sigma_m = mp.Value('f', hp.NOISE_SIGMA_INITIAL)
     gif_req_m = mp.Value('i', -1)
     data_proc_list = []
     for _ in range(hp.N_ROLLOUT_PROCESSES):
@@ -82,6 +77,7 @@ if __name__ == "__main__":
                 device,
                 exp_queue,
                 finish_event,
+                sigma_m,
                 gif_req_m,
                 hp
             )
@@ -90,10 +86,10 @@ if __name__ == "__main__":
         data_proc_list.append(data_proc)
 
     # Training
+    tgt_pi = TargetActor(pi)
     tgt_Q = TargetCritic(Q)
     pi_opt = optim.Adam(pi.parameters(), lr=hp.LEARNING_RATE)
     Q_opt = optim.Adam(Q.parameters(), lr=hp.LEARNING_RATE)
-    alpha_optim = optim.Adam([log_alpha], lr=hp.LEARNING_RATE)
     buffer = ReplayBuffer(buffer_size=hp.REPLAY_SIZE,
                           observation_space=hp.observation_space,
                           action_space=hp.action_space,
@@ -142,47 +138,43 @@ if __name__ == "__main__":
             n_samples += new_samples
             sample_time = time.perf_counter()
 
+
             # Only start training after buffer is larger than initial value
             if buffer.size() < hp.REPLAY_INITIAL:
                 continue
 
             # Sample a batch and load it as a tensor on device
             batch = buffer.sample(hp.BATCH_SIZE)
-            pi_loss, Q_loss1, Q_loss2, log_pi = loss_sac(alpha,
-                                                         hp.GAMMA**hp.REWARD_STEPS,
-                                                         batch, Q, pi,
-                                                         tgt_Q, device)
+            S_v = batch.observations
+            A_v = batch.actions
+            r_v = batch.rewards
+            dones = batch.dones
+            S_next_v = batch.next_observations
 
-            # train Entropy parameter
-
-            alpha_loss = -(log_alpha * (log_pi + target_entropy).detach())
-            alpha_loss = alpha_loss.mean()
-
-            alpha_optim.zero_grad()
-            alpha_loss.backward()
-            alpha_optim.step()
-
-            alpha = log_alpha.exp()
-            alpha_tlogs = alpha.clone()
-            metrics["train/loss_alpha"] = alpha_loss.cpu().detach().numpy()
-            metrics["train/alpha"] = alpha.cpu().detach().numpy()
+            # train critic
+            Q_opt.zero_grad()
+            Q_v = Q(S_v, A_v)  # expected Q for S,A
+            A_next_v = tgt_pi(S_next_v)  # Get an Bootstrap Action for S_next
+            Q_next_v = tgt_Q(S_next_v, A_next_v)  # Bootstrap Q_next
+            Q_next_v[dones == 1.] = 0.0  # No bootstrap if transition is terminal
+            # Calculate a reference Q value using the bootstrap Q
+            Q_ref_v = r_v + Q_next_v * (hp.GAMMA**hp.REWARD_STEPS)
+            Q_loss_v = F.mse_loss(Q_v, Q_ref_v.detach())
+            Q_loss_v.backward()
+            Q_opt.step()
+            metrics["train/loss_Q"] = Q_loss_v.cpu().detach().numpy()
 
             # train actor - Maximize Q value received over every S
             pi_opt.zero_grad()
-            pi_loss.backward()
+            A_cur_v = pi(S_v)
+            pi_loss_v = -Q(S_v, A_cur_v)
+            pi_loss_v = pi_loss_v.mean()
+            pi_loss_v.backward()
             pi_opt.step()
-            metrics["train/loss_pi"] = pi_loss.cpu().detach().numpy()
-
-            # train critic
-            Q_loss = Q_loss1 + Q_loss2
-            Q_opt.zero_grad()
-            Q_loss.backward()
-            Q_opt.step()
-
-            metrics["train/loss_Q1"] = Q_loss1.cpu().detach().numpy()
-            metrics["train/loss_Q2"] = Q_loss2.cpu().detach().numpy()
+            metrics["train/loss_pi"] = pi_loss_v.cpu().detach().numpy()
 
             # Sync target networks
+            tgt_pi.sync(alpha=1 - 1e-3)
             tgt_Q.sync(alpha=1 - 1e-3)
 
             n_grads += 1
@@ -207,14 +199,22 @@ if __name__ == "__main__":
 
             # Log metrics
             wandb.log(metrics)
+
+            if hp.NOISE_SIGMA_DECAY and sigma_m.value > hp.NOISE_SIGMA_MIN \
+                and n_grads % hp.NOISE_SIGMA_GRAD_STEPS == 0:
+                # This syntax is needed to be process-safe
+                # The noise sigma value is accessed by the playing processes
+                with sigma_m.get_lock():
+                    sigma_m.value *= hp.NOISE_SIGMA_DECAY
+
             if hp.SAVE_FREQUENCY and n_grads % hp.SAVE_FREQUENCY == 0:
                 save_checkpoint(
                     hp=hp,
                     metrics={
-                        'alpha': alpha,
+                        'noise_sigma': sigma_m.value,
                         'n_samples': n_samples,
+                        'n_episodes': n_episodes,   
                         'n_grads': n_grads,
-                        'n_episodes': n_episodes
                     },
                     pi=pi,
                     Q=Q,

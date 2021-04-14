@@ -61,15 +61,8 @@ def data_func(
             st_time = time.perf_counter()
             for i in range(hp.MAX_EPISODE_STEPS):
                 # Step the environment
-                if hp.MULTI_AGENT:
-                    a = list()
-                    for i in range(hp.N_AGENTS):
-                        s_v = torch.Tensor(s[i]).to(device)
-                        a.append(pi[i].get_action(s_v))
-                    a = np.array(a, dtype=np.float)
-                else:
-                    s_v = torch.Tensor(s).to(device)
-                    a = pi.get_action(s_v)
+                s_v = torch.Tensor(s).to(device)
+                a = pi.get_action(s_v)
                 s_next, r, done, info = env.step(a)
 
                 ep_steps += 1
