@@ -89,21 +89,12 @@ def save_checkpoint(
 ):
     checkpoint = dataclasses.asdict(hp)
     checkpoint.update(metrics)
-    if hp.MULTI_AGENT:
-        agents = {f'agent_{i}': {
-            "pi_state_dict": pi[i].state_dict(),
-            "Q_state_dict": Q[i].state_dict(),
-            "pi_opt_state_dict": pi_opt[i].state_dict(),
-            "Q_opt_state_dict": Q_opt[i].state_dict(),
-        } for i in range(hp.N_AGENTS)}
-        checkpoint.update(agents)
-    else:
-        checkpoint.update({
-            "pi_state_dict": pi.state_dict(),
-            "Q_state_dict": Q.state_dict(),
-            "pi_opt_state_dict": pi_opt.state_dict(),
-            "Q_opt_state_dict": Q_opt.state_dict(),
-        })
+    checkpoint.update({
+        "pi_state_dict": pi.state_dict(),
+        "Q_state_dict": Q.state_dict(),
+        "pi_opt_state_dict": pi_opt.state_dict(),
+        "Q_opt_state_dict": Q_opt.state_dict(),
+    })
     filename = os.path.join(
         hp.CHECKPOINT_PATH, "checkpoint_{:09}.pth".format(metrics['n_grads']))
     torch.save(checkpoint, filename)
