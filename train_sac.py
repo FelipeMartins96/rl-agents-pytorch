@@ -51,8 +51,7 @@ if __name__ == "__main__":
         GIF_FREQUENCY=100000,
         TOTAL_GRAD_STEPS=1000000
     )
-    wandb.init(project='RoboCIn-RL', entity='goncamateus',
-               name=hp.EXP_NAME, config=hp.to_dict())
+    wandb.init(project='RoboCIn-RL', name=hp.EXP_NAME, config=hp.to_dict())
     current_time = datetime.datetime.now().strftime('%b-%d_%H-%M-%S')
     tb_path = os.path.join('runs', current_time + '_'
                            + hp.ENV_NAME + '_' + hp.EXP_NAME)

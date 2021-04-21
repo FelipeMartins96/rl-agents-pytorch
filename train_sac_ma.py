@@ -35,7 +35,7 @@ if __name__ == "__main__":
         EXP_NAME=args.name,
         DEVICE=device,
         ENV_NAME=args.env,
-        N_ROLLOUT_PROCESSES=4,
+        N_ROLLOUT_PROCESSES=3,
         LEARNING_RATE=0.0001,
         EXP_GRAD_RATIO=10,
         BATCH_SIZE=256,
@@ -48,12 +48,11 @@ if __name__ == "__main__":
         REPLAY_SIZE=1000000,
         REPLAY_INITIAL=100000,
         SAVE_FREQUENCY=100000,
-        GIF_FREQUENCY=100000,
-        TOTAL_GRAD_STEPS=1000000,
+        GIF_FREQUENCY=10000,
+        TOTAL_GRAD_STEPS=2000000,
         MULTI_AGENT=True
     )
-    wandb.init(project='RoboCIn-RL', entity='goncamateus',
-               name=hp.EXP_NAME, config=hp.to_dict())
+    wandb.init(project='RoboCIn-RL', name=hp.EXP_NAME, config=hp.to_dict())
     current_time = datetime.datetime.now().strftime('%b-%d_%H-%M-%S')
     tb_path = os.path.join('runs', current_time + '_'
                            + hp.ENV_NAME + '_' + hp.EXP_NAME)
