@@ -16,8 +16,12 @@ import wandb
 from agents.ddpg import (DDPGHP, DDPGActor, DDPGCritic, TargetActor,
                          TargetCritic, data_func)
 from agents.utils import ReplayBuffer, save_checkpoint, unpack_batch, ExperienceFirstLast
+import pyvirtualdisplay
 
 if __name__ == "__main__":
+    # Creates a virtual display for OpenAI gym
+    pyvirtualdisplay.Display(visible=0, size=(1400, 900)).start()
+
     mp.set_start_method('spawn')
     os.environ['OMP_NUM_THREADS'] = "1"
     parser = argparse.ArgumentParser()
