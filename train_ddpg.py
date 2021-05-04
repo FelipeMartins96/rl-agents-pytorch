@@ -7,7 +7,7 @@ import time
 
 import gym
 import numpy as np
-import rc_gym
+import rsoccer_gym
 import torch.multiprocessing as mp
 import torch.nn.functional as F
 import torch.optim as optim
@@ -39,7 +39,7 @@ if __name__ == "__main__":
         EXP_NAME=args.name,
         DEVICE=device,
         ENV_NAME=args.env,
-        N_ROLLOUT_PROCESSES=3,
+        N_ROLLOUT_PROCESSES=2,
         LEARNING_RATE=0.0001,
         EXP_GRAD_RATIO=10,
         BATCH_SIZE=256,

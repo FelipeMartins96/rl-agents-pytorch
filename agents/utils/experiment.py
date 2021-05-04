@@ -1,7 +1,7 @@
 import dataclasses
 
 import gym
-import rc_gym
+import rsoccer_gym
 import torch
 import os
 
