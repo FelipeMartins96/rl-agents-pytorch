@@ -74,13 +74,22 @@ class SubProcessEnv(Process):
             elif command == 'step':
                 state, reward, done, aux = env.step(args)
                 steps += 1
-                collected_reward += reward
+                if isinstance(reward, int) or isinstance(reward, float):
+                    collected_reward += reward
+                else:
+                    if isinstance(collected_reward, int):
+                        collected_reward = reward
+                    else:
+                        collected_reward += np.array(reward)
                 if done:
                     state = env.reset()
                 self.pipe.send((state, reward, done, aux, collected_reward))
                 if done:
                     steps = 0
-                    collected_reward = 0
+                    if isinstance(reward, int) or isinstance(reward, float):
+                        collected_reward = 0
+                    else:
+                        collected_reward = np.zeros(len(reward))
             elif command == 'close':
                 env.close()
                 break
