@@ -121,7 +121,7 @@ def main(args):
         NOISE_SIGMA_MIN=0.15,
         NOISE_SIGMA_GRAD_STEPS=3000,
         REPLAY_SIZE=1000000,
-        REPLAY_INITIAL=100000,
+        REPLAY_INITIAL=1024,
         SAVE_FREQUENCY=100000,
         GIF_FREQUENCY=100000,
         TOTAL_GRAD_STEPS=1000000,
@@ -184,8 +184,8 @@ def main(args):
                             last_state = exp.last_state
                         else:
                             last_state = exp.state
-                        trainers[i].experience(exp.state, last_state,
-                                               exp.action, exp.reward,
+                        trainers[i].experience(exp.state, exp.action,
+                                               exp.reward, last_state,
                                                False if exp.last_state is not None else True)
                     new_samples += 1
             n_samples += new_samples

@@ -93,7 +93,7 @@ class MADDPGAgentTrainer(object):
 
         # Create experience buffer
         self.replay_buffer = ReplayBuffer(1e6)
-        self.min_replay_buffer_len = args.BATCH_SIZE * args.MAX_EPISODE_STEPS
+        self.min_replay_buffer_len = args.REPLAY_INITIAL
         self.replay_sample_index = None
 
     def save(self):
@@ -172,7 +172,10 @@ class MADDPGAgentTrainer(object):
                     new_act = torch.tanh(new_act)
             new_acts_n.append(new_act)
             tgt_res = agents[i].tgt_pi(obs_next_v)
-            tgt_res = onehot_from_logits(tgt_res)
+            if self.discrete:
+                tgt_res = onehot_from_logits(tgt_res)
+            else:
+                tgt_res = torch.tanh(tgt_res)
             target_act_next_n.append(tgt_res)
         _, _, rew, _, done = self.replay_buffer.sample_index(index)
         rew_v = torch.Tensor(rew).to(self.args.DEVICE).float().unsqueeze(1)
