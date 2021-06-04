@@ -9,10 +9,13 @@ import numpy as np
 import rsoccer_gym
 import torch
 import torch.multiprocessing as mp
+import PIL
+from PIL.Image import fromarray, ADAPTIVE
+
 
 import wandb
 from agents.maddpg import MADDPGAgentTrainer, MADDPGHP
-from agents.utils import (ExperienceFirstLast, MultiEnv, NStepTracer,
+from agents.utils import (ExperienceFirstLast, MultiEnv, OrnsteinUhlenbeckNoise,
                           ReplayBuffer, generate_gif, gif, save_checkpoint)
 
 
@@ -33,13 +36,23 @@ def rollout(
     queue_m,
     finish_event_m,
     gif_req_m,
+    sigma_m,
     hp
 ):
     envs = MultiEnv(hp.ENV_NAME, hp.N_ROLLOUT_PROCESSES)
+    noise = OrnsteinUhlenbeckNoise(
+        sigma=sigma_m.value,
+        theta=hp.NOISE_THETA,
+        min_value=-1,
+        max_value=1
+    )
+    noise.reset()
+    frames = []
 
     with torch.no_grad():
         # Check for generate gif request
         gif_idx = -1
+        env_gif = -1
 
         s = envs.reset()
         ep_steps = np.array([0]*hp.N_ROLLOUT_PROCESSES)
@@ -49,13 +62,16 @@ def rollout(
             # Step the environment
             a = []
             for i in range(hp.N_ROLLOUT_PROCESSES):
-                env_act = [agent.action(obs)
+                env_act = [agent.action(obs, noise)
                            for agent, obs in zip(trainers, s[i])]
                 a.append(env_act)
 
             s_next, r, done, info = envs.step(a)
             if gif_idx != -1:
-                envs.render(mode='rgb_array', env_idx=gif_idx)
+                frame = envs.render(mode='rgb_array', env_idx=env_gif)
+                frame = fromarray(frame)
+                frame = frame.convert('P', palette=ADAPTIVE)
+                frames.append(frame)
 
             ep_steps += 1
             ep_rw += r
@@ -73,21 +89,35 @@ def rollout(
                 queue_m.put(exp)
 
                 if done[i]:
-                    if gif_idx != -1:
+                    if gif_idx != -1 and env_gif == i:
+                        path = os.path.join(hp.GIF_PATH, f"{gif_idx:09d}.gif")
+                        frames[0].save(
+                            fp=path, 
+                            format='GIF', 
+                            append_images=frames[1:], 
+                            save_all=True,
+                            duration=25, 
+                            loop=0
+                        )
                         gif_idx = -1
                     with gif_req_m.get_lock():
                         if gif_req_m.value != -1:
-                            gif_idx = i
+                            env_gif = i
+                            gif_idx = gif_req_m.value
                             gif_req_m.value = -1
                     s[i] = envs.reset(i)
                     info[i]['fps'] = ep_steps / \
                         (time.perf_counter() - st_time[i])
                     info[i]['ep_steps'] = ep_steps[i]
                     info[i]['ep_rw'] = np.mean(ep_rw[i])
+                    info[i]['noise'] = noise.sigma
                     queue_m.put(info[i])
                     ep_steps[i] = 0
                     ep_rw[i] = 0
                     st_time[i] = time.perf_counter()
+                    noise.reset()
+                    noise.sigma = sigma_m.value
+                    frames = []
                 else:
                     s[i] = s_next[i]
 
@@ -111,19 +141,19 @@ def main(args):
         ENV_NAME=args.env,
         N_ROLLOUT_PROCESSES=3,
         LEARNING_RATE=0.0001,
-        EXP_GRAD_RATIO=100,
+        EXP_GRAD_RATIO=10,
         BATCH_SIZE=1024,
         GAMMA=0.95,
         REWARD_STEPS=3,
-        NOISE_SIGMA_INITIAL=0.8,
+        NOISE_SIGMA_INITIAL=0.1,
         NOISE_THETA=0.15,
         NOISE_SIGMA_DECAY=0.99,
         NOISE_SIGMA_MIN=0.15,
         NOISE_SIGMA_GRAD_STEPS=3000,
         REPLAY_SIZE=1000000,
         REPLAY_INITIAL=1024,
-        SAVE_FREQUENCY=100000,
-        GIF_FREQUENCY=100000,
+        SAVE_FREQUENCY=10000,
+        GIF_FREQUENCY=10000,
         TOTAL_GRAD_STEPS=1000000,
         MULTI_AGENT=True,
         DISCRETE=False
@@ -141,6 +171,7 @@ def main(args):
     exp_queue = mp.Queue(maxsize=hp.EXP_GRAD_RATIO)
     finish_event = mp.Event()
     gif_req_m = mp.Value('i', -1)
+    sigma_m = mp.Value('f', hp.NOISE_SIGMA_INITIAL)
     data_proc = mp.Process(
         target=rollout,
         args=(
@@ -148,6 +179,7 @@ def main(args):
             exp_queue,
             finish_event,
             gif_req_m,
+            sigma_m,
             hp
         )
     )
@@ -195,7 +227,7 @@ def main(args):
             if len(trainers[i].replay_buffer) < hp.REPLAY_INITIAL:
                 continue
 
-            # Sample a batch and load it as a tensor on device        
+            # Sample a batch and load it as a tensor on device
             for agent in trainers:
                 agent.preupdate()
             for agent in trainers:
@@ -228,10 +260,18 @@ def main(args):
                                 metrics[f"ep_info/agent_{i}/{inner_key}"] = np.mean(
                                     [info[key][inner_key] for info in ep_infos])
                     else:
-                        metrics[key] = np.mean([info[key] for info in ep_infos])
+                        metrics[key] = np.mean([info[key]
+                                               for info in ep_infos])
 
             # Log metrics
             wandb.log(metrics)
+            if hp.NOISE_SIGMA_DECAY and sigma_m.value > hp.NOISE_SIGMA_MIN \
+                    and n_grads % hp.NOISE_SIGMA_GRAD_STEPS == 0:
+                # This syntax is needed to be process-safe
+                # The noise sigma value is accessed by the playing processes
+                with sigma_m.get_lock():
+                    sigma_m.value *= hp.NOISE_SIGMA_DECAY
+
             if hp.SAVE_FREQUENCY and n_grads % hp.SAVE_FREQUENCY == 0:
                 save_checkpoint(
                     hp=hp,

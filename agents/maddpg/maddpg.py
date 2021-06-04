@@ -118,13 +118,14 @@ class MADDPGAgentTrainer(object):
         self.tgt_pi = TargetActor(self.pi)
         self.tgt_Q = TargetCritic(self.Q)
 
-    def action(self, obs):
+    def action(self, obs, noise=None):
         obs = torch.Tensor([obs]).to(self.args.DEVICE)
         act = self.pi(obs)
         if self.discrete:
             act = onehot_from_logits(act)
         else:
             act = torch.tanh(act)
+            act = noise(act)
         return act.detach().cpu().numpy().squeeze()
 
     def experience(self, obs, act, rew, new_obs, done):
