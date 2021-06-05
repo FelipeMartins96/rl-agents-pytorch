@@ -27,6 +27,80 @@ class MADDPGHP(HyperParameters):
     NOISE_SIGMA_GRAD_STEPS: float = None  # Decay action noise every _ grad steps
     DISCRETE: float = None
 
+
+def data_func(
+    trainers,
+    queue_m,
+    finish_event_m,
+    sigma_m,
+    gif_req_m,
+    hp
+):
+    env = gym.make(hp.ENV_NAME)
+    noise = OrnsteinUhlenbeckNoise(
+        sigma=sigma_m.value,
+        theta=hp.NOISE_THETA,
+        min_value=env.action_space.low[0],
+        max_value=env.action_space.high[1]
+    )
+
+    with torch.no_grad():
+        while not finish_event_m.is_set():
+            # Check for generate gif request
+            gif_idx = -1
+            with gif_req_m.get_lock():
+                if gif_req_m.value != -1:
+                    gif_idx = gif_req_m.value
+                    gif_req_m.value = -1
+            if gif_idx != -1:
+                path = os.path.join(hp.GIF_PATH, f"{gif_idx:09d}.gif")
+                generate_gif(env=env, filepath=path,
+                             pi=copy.deepcopy(trainers), hp=hp)
+
+            done = False
+            s = env.reset()
+            noise.reset()
+            noise.sigma = sigma_m.value
+            info = {}
+            ep_steps = 0
+            ep_rw = [0]*hp.N_AGENTS
+            st_time = time.perf_counter()
+            for i in range(hp.MAX_EPISODE_STEPS):
+                # Step the environment
+                actions = [agent.action(obs) for agent, obs in zip(trainers, s)]
+                a = [noise(act) for act in actions]
+                s_next, r, done, info = env.step(a)
+                ep_steps += 1
+                if hp.MULTI_AGENT:
+                    for i in range(hp.N_AGENTS):
+                        ep_rw[i] += r[i]
+                else:
+                    ep_rw += r
+
+                # Trace NStep rewards and add to mp queue
+                exp = list()
+                for i in range(hp.N_AGENTS):
+                    kwargs = {
+                        'state': s[i],
+                        'action': a[i],
+                        'reward': r[i],
+                        'last_state': s_next[i]
+                    }
+                    exp.append(ExperienceFirstLast(**kwargs))
+                queue_m.put(exp)
+                if done:
+                    break
+
+                # Set state for next step
+                s = s_next
+
+            info['fps'] = ep_steps / (time.perf_counter() - st_time)
+            info['noise'] = noise.sigma
+            info['ep_steps'] = ep_steps
+            info['ep_rw'] = ep_rw
+            queue_m.put(info)
+
+
 def onehot_from_logits(logits):
     """
     Given batch of logits, return one-hot sample 
@@ -69,7 +143,6 @@ def gumbel_softmax(logits, temperature=1.0, hard=False):
         y_hard = onehot_from_logits(y)
         y = (y_hard - y).detach() + y
     return y
-
 
 
 class MADDPGAgentTrainer(object):
@@ -118,15 +191,15 @@ class MADDPGAgentTrainer(object):
         self.tgt_pi = TargetActor(self.pi)
         self.tgt_Q = TargetCritic(self.Q)
 
-    def action(self, obs, noise=None):
+    def action(self, obs, noise=lambda x: x):
         obs = torch.Tensor([obs]).to(self.args.DEVICE)
         act = self.pi(obs)
         if self.discrete:
-            act = onehot_from_logits(act)
+            act = onehot_from_logits(act).detach().cpu().numpy().squeeze()
         else:
-            act = torch.tanh(act)
+            act = torch.tanh(act).detach().cpu().numpy().squeeze()
             act = noise(act)
-        return act.detach().cpu().numpy().squeeze()
+        return act
 
     def experience(self, obs, act, rew, new_obs, done):
         # Store transition in the replay buffer.
