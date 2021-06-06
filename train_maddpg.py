@@ -176,8 +176,6 @@ def main(args):
                     if not isinstance(ep_infos[0][key], dict):
                         metrics[key] = np.mean([info[key]
                                                for info in ep_infos])
-                pprint.pprint(metrics)
-                print('--------------------------------')
 
             # Log metrics
             wandb.log(metrics)
