@@ -11,6 +11,7 @@ import torch
 import torch.multiprocessing as mp
 import PIL
 from PIL.Image import fromarray, ADAPTIVE
+import pprint
 
 
 import wandb
@@ -96,7 +97,6 @@ def main(args):
         )
         data_proc.start()
         data_proc_list.append(data_proc)
-    
 
     n_grads = 0
     n_samples = 0
@@ -143,7 +143,7 @@ def main(args):
             # Sample a batch and load it as a tensor on device
             for agent in trainers:
                 agent.preupdate()
-            for agent in trainers:
+            for i, agent in enumerate(trainers):
                 loss = agent.update(trainers)
                 if loss:
                     metrics.update({
@@ -154,6 +154,12 @@ def main(args):
                         "{}/mean(target_q_next)".format(agent.name): loss[4],
                         "{}/std(target_q)".format(agent.name): loss[5]
                     })
+                if ep_infos:
+                    info = ep_infos[0]
+                    info_metrics = {}
+                    for key, value in info[f'ep_info/robot_{i}'].items():
+                        info_metrics[f'{agent.name}/{key}'] = value
+                    metrics.update(info_metrics)
 
             n_grads += 1
             grad_time = time.perf_counter()
@@ -167,14 +173,11 @@ def main(args):
 
             if ep_infos:
                 for key in ep_infos[0].keys():
-                    if isinstance(ep_infos[0][key], dict):
-                        for i in range(hp.N_AGENTS):
-                            for inner_key in ep_infos[0][key].keys():
-                                metrics[f"ep_info/agent_{i}/{inner_key}"] = np.mean(
-                                    [info[key][inner_key] for info in ep_infos])
-                    else:
+                    if not isinstance(ep_infos[0][key], dict):
                         metrics[key] = np.mean([info[key]
                                                for info in ep_infos])
+                pprint.pprint(metrics)
+                print('--------------------------------')
 
             # Log metrics
             wandb.log(metrics)
