@@ -7,7 +7,7 @@ import time
 
 import gym
 import numpy as np
-import rc_gym
+import rsoccer_gym
 import torch.multiprocessing as mp
 import torch.nn.functional as F
 import torch.optim as optim

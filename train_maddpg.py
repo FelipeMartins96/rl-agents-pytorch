@@ -9,17 +9,18 @@ import numpy as np
 import rsoccer_gym
 import torch
 import torch.multiprocessing as mp
-import torch.nn.functional as F
-import torch.optim as optim
+import PIL
+from PIL.Image import fromarray, ADAPTIVE
+import pprint
+
 
 import wandb
-from agents.sac import (SACHP, GaussianPolicy, QNetwork, TargetCritic,
-                        data_func, loss_sac)
-from agents.utils import ReplayBuffer, save_checkpoint
+from agents.maddpg import MADDPGAgentTrainer, MADDPGHP, data_func
+from agents.utils import (ExperienceFirstLast, MultiEnv, OrnsteinUhlenbeckNoise,
+                          ReplayBuffer, generate_gif, gif, save_checkpoint)
 
-if __name__ == "__main__":
-    mp.set_start_method('spawn')
-    os.environ['OMP_NUM_THREADS'] = "1"
+
+def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--cuda", default=False,
                         action="store_true", help="Enable cuda")
@@ -28,59 +29,68 @@ if __name__ == "__main__":
     parser.add_argument("-e", "--env", required=True,
                         help="Name of the gym environment")
     args = parser.parse_args()
-    device = "cuda" if args.cuda else "cpu"
+    return args
 
+
+def get_trainers(hp):
+    trainers = []
+    trainer = MADDPGAgentTrainer
+    for i in range(hp.N_AGENTS):
+        trainers.append(trainer(i, hp))
+
+    return trainers
+
+
+def main(args):
+    device = "cuda" if args.cuda else "cpu"
+    mp.set_start_method('spawn')
     # Input Experiment Hyperparameters
-    hp = SACHP(
+    hp = MADDPGHP(
         EXP_NAME=args.name,
         DEVICE=device,
         ENV_NAME=args.env,
-        N_ROLLOUT_PROCESSES=3,
+        N_ROLLOUT_PROCESSES=4,
         LEARNING_RATE=0.0001,
         EXP_GRAD_RATIO=10,
-        BATCH_SIZE=256,
+        BATCH_SIZE=1024,
         GAMMA=0.95,
         REWARD_STEPS=3,
-        ALPHA=0.015,
-        LOG_SIG_MAX=2,
-        LOG_SIG_MIN=-20,
-        EPSILON=1e-6,
+        NOISE_SIGMA_INITIAL=0.8,
+        NOISE_THETA=0.15,
+        NOISE_SIGMA_DECAY=0.99,
+        NOISE_SIGMA_MIN=0.15,
+        NOISE_SIGMA_GRAD_STEPS=3000,
         REPLAY_SIZE=1000000,
         REPLAY_INITIAL=100000,
         SAVE_FREQUENCY=100000,
         GIF_FREQUENCY=10000,
         TOTAL_GRAD_STEPS=2000000,
-        MULTI_AGENT=True
+        MULTI_AGENT=True,
+        DISCRETE=False
     )
-    wandb.init(project='RoboCIn-RL', name=hp.EXP_NAME, config=hp.to_dict())
+    wandb.init(project='RoboCIn-RL', name=hp.EXP_NAME,
+               entity='robocin', config=hp.to_dict())
     current_time = datetime.datetime.now().strftime('%b-%d_%H-%M-%S')
     tb_path = os.path.join('runs', current_time + '_'
                            + hp.ENV_NAME + '_' + hp.EXP_NAME)
-
-    # Actor-Critic
-    pi = GaussianPolicy(hp.N_OBS, hp.N_ACTS,
-                        hp.LOG_SIG_MIN,
-                        hp.LOG_SIG_MAX, hp.EPSILON).to(device)
-    Q = QNetwork(hp.N_OBS, hp.N_ACTS).to(device)
-    # Entropy
-    alpha = hp.ALPHA
-    target_entropy = -torch.prod(torch.Tensor(hp.N_ACTS).to(device)).item()
-    log_alpha = torch.zeros(1, requires_grad=True, device=device)
+    # Training
+    trainers = get_trainers(hp)
 
     # Playing
-    pi.share_memory()
+    [trainers[i].pi.share_memory() for i in range(hp.N_AGENTS)]
     exp_queue = mp.Queue(maxsize=hp.EXP_GRAD_RATIO)
     finish_event = mp.Event()
     gif_req_m = mp.Value('i', -1)
-    data_proc_list = []
+    sigma_m = mp.Value('f', hp.NOISE_SIGMA_INITIAL)
+    data_proc_list = list()
     for _ in range(hp.N_ROLLOUT_PROCESSES):
         data_proc = mp.Process(
             target=data_func,
             args=(
-                pi,
-                device,
+                trainers,
                 exp_queue,
                 finish_event,
+                sigma_m,
                 gif_req_m,
                 hp
             )
@@ -88,22 +98,11 @@ if __name__ == "__main__":
         data_proc.start()
         data_proc_list.append(data_proc)
 
-    # Training
-    tgt_Q = TargetCritic(Q)
-    pi_opt = optim.Adam(pi.parameters(), lr=hp.LEARNING_RATE)
-    Q_opt = optim.Adam(Q.parameters(), lr=hp.LEARNING_RATE)
-    alpha_optim = optim.Adam([log_alpha], lr=hp.LEARNING_RATE)
-    buffer = ReplayBuffer(buffer_size=hp.REPLAY_SIZE,
-                          observation_space=hp.observation_space,
-                          action_space=hp.action_space,
-                          device=hp.DEVICE
-                          )
     n_grads = 0
     n_samples = 0
     n_episodes = 0
     best_reward = None
     last_gif = None
-
     try:
         while n_grads < hp.TOTAL_GRAD_STEPS:
             metrics = {}
@@ -125,64 +124,42 @@ if __name__ == "__main__":
                     ep_infos.append(logs)
                     n_episodes += 1
                 else:
-                    for exp in safe_exp:
+                    for i, exp in enumerate(safe_exp):
                         if exp.last_state is not None:
                             last_state = exp.last_state
                         else:
                             last_state = exp.state
-                        buffer.add(
-                            obs=exp.state,
-                            next_obs=last_state,
-                            action=exp.action,
-                            reward=exp.reward,
-                            done=False if exp.last_state is not None else True
-                        )
+                        trainers[i].experience(exp.state, exp.action,
+                                               exp.reward, last_state,
+                                               False if exp.last_state is not None else True)
                     new_samples += 1
             n_samples += new_samples
             sample_time = time.perf_counter()
 
             # Only start training after buffer is larger than initial value
-            if buffer.size() < hp.REPLAY_INITIAL:
+            if len(trainers[i].replay_buffer) < hp.REPLAY_INITIAL:
                 continue
 
             # Sample a batch and load it as a tensor on device
-            batch = buffer.sample(hp.BATCH_SIZE)
-            pi_loss, Q_loss1, Q_loss2, log_pi = loss_sac(alpha,
-                                                         hp.GAMMA**hp.REWARD_STEPS,
-                                                         batch, Q, pi,
-                                                         tgt_Q, device)
-
-            # train Entropy parameter
-
-            alpha_loss = -(log_alpha * (log_pi + target_entropy).detach())
-            alpha_loss = alpha_loss.mean()
-
-            alpha_optim.zero_grad()
-            alpha_loss.backward()
-            alpha_optim.step()
-
-            alpha = log_alpha.exp()
-            alpha_tlogs = alpha.clone()
-            metrics["train/loss_alpha"] = alpha_loss.cpu().detach().numpy()
-            metrics["train/alpha"] = alpha.cpu().detach().numpy()
-
-            # train actor - Maximize Q value received over every S
-            pi_opt.zero_grad()
-            pi_loss.backward()
-            pi_opt.step()
-            metrics["train/loss_pi"] = pi_loss.cpu().detach().numpy()
-
-            # train critic
-            Q_loss = Q_loss1 + Q_loss2
-            Q_opt.zero_grad()
-            Q_loss.backward()
-            Q_opt.step()
-
-            metrics["train/loss_Q1"] = Q_loss1.cpu().detach().numpy()
-            metrics["train/loss_Q2"] = Q_loss2.cpu().detach().numpy()
-
-            # Sync target networks
-            tgt_Q.sync(alpha=1 - 1e-3)
+            for agent in trainers:
+                agent.preupdate()
+            for i, agent in enumerate(trainers):
+                loss = agent.update(trainers)
+                if loss:
+                    metrics.update({
+                        "{}/q_loss".format(agent.name): loss[0],
+                        "{}/p_loss".format(agent.name): loss[1],
+                        "{}/mean(target_q)".format(agent.name): loss[2],
+                        "{}/mean(rew)".format(agent.name): loss[3],
+                        "{}/mean(target_q_next)".format(agent.name): loss[4],
+                        "{}/std(target_q)".format(agent.name): loss[5]
+                    })
+                if ep_infos:
+                    info = ep_infos[0]
+                    info_metrics = {}
+                    for key, value in info[f'ep_info/robot_{i}'].items():
+                        info_metrics[f'{agent.name}/{key}'] = value
+                    metrics.update(info_metrics)
 
             n_grads += 1
             grad_time = time.perf_counter()
@@ -192,33 +169,35 @@ if __name__ == "__main__":
             metrics['counters/samples'] = n_samples
             metrics['counters/grads'] = n_grads
             metrics['counters/episodes'] = n_episodes
-            metrics["counters/buffer_len"] = buffer.size()
+            metrics["counters/buffer_len"] = len(trainers[i].replay_buffer)
 
             if ep_infos:
                 for key in ep_infos[0].keys():
-                    if isinstance(ep_infos[0][key], dict):
-                        for i in range(hp.N_AGENTS):
-                            for inner_key in ep_infos[0][key].keys():
-                                metrics[f"ep_info/agent_{i}/{inner_key}"] = np.mean(
-                                    [info[key][inner_key] for info in ep_infos])
-                    else:
-                        metrics[key] = np.mean([info[key] for info in ep_infos])
+                    if not isinstance(ep_infos[0][key], dict):
+                        metrics[key] = np.mean([info[key]
+                                               for info in ep_infos])
 
             # Log metrics
             wandb.log(metrics)
+            if hp.NOISE_SIGMA_DECAY and sigma_m.value > hp.NOISE_SIGMA_MIN \
+                    and n_grads % hp.NOISE_SIGMA_GRAD_STEPS == 0:
+                # This syntax is needed to be process-safe
+                # The noise sigma value is accessed by the playing processes
+                with sigma_m.get_lock():
+                    sigma_m.value *= hp.NOISE_SIGMA_DECAY
+
             if hp.SAVE_FREQUENCY and n_grads % hp.SAVE_FREQUENCY == 0:
                 save_checkpoint(
                     hp=hp,
                     metrics={
-                        'alpha': alpha,
                         'n_samples': n_samples,
                         'n_grads': n_grads,
                         'n_episodes': n_episodes
                     },
-                    pi=pi,
-                    Q=Q,
-                    pi_opt=pi_opt,
-                    Q_opt=Q_opt
+                    pi=[trainers[i].pi for i in range(hp.N_AGENTS)],
+                    Q=[trainers[i].Q for i in range(hp.N_AGENTS)],
+                    pi_opt=[trainers[i].pi_opt for i in range(hp.N_AGENTS)],
+                    Q_opt=[trainers[i].Q_opt for i in range(hp.N_AGENTS)]
                 )
 
             if hp.GIF_FREQUENCY and n_grads % hp.GIF_FREQUENCY == 0:
@@ -241,6 +220,10 @@ if __name__ == "__main__":
             p.join()
 
         del(exp_queue)
-        del(pi)
+        del(trainers)
 
         finish_event.set()
+
+
+if __name__ == "__main__":
+    main(get_args())

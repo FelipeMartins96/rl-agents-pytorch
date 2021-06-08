@@ -4,7 +4,7 @@ import time
 
 import gym
 import numpy as np
-import rc_gym
+import rsoccer_gym
 import torch
 
 from agents.ddpg import DDPGActor

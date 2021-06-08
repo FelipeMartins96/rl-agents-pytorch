@@ -1,7 +1,7 @@
 import dataclasses
 
 import gym
-import rc_gym
+import rsoccer_gym
 import torch
 import os
 
@@ -89,12 +89,20 @@ def save_checkpoint(
 ):
     checkpoint = dataclasses.asdict(hp)
     checkpoint.update(metrics)
-    checkpoint.update({
-        "pi_state_dict": pi.state_dict(),
-        "Q_state_dict": Q.state_dict(),
-        "pi_opt_state_dict": pi_opt.state_dict(),
-        "Q_opt_state_dict": Q_opt.state_dict(),
-    })
+    if not isinstance(pi, list):
+        checkpoint.update({
+            "pi_state_dict": pi.state_dict(),
+            "Q_state_dict": Q.state_dict(),
+            "pi_opt_state_dict": pi_opt.state_dict(),
+            "Q_opt_state_dict": Q_opt.state_dict(),
+        })
+    else:
+        checkpoint.update({
+            "pi_state_dict": [net.state_dict() for net in pi],
+            "Q_state_dict": [net.state_dict() for net in Q],
+            "pi_opt_state_dict": [opt.state_dict() for opt in pi_opt],
+            "Q_opt_state_dict": [opt.state_dict() for opt in Q_opt],
+        })
     filename = os.path.join(
         hp.CHECKPOINT_PATH, "checkpoint_{:09}.pth".format(metrics['n_grads']))
     torch.save(checkpoint, filename)
