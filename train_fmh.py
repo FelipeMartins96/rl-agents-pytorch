@@ -7,14 +7,12 @@ import time
 import gym
 import numpy as np
 import rsoccer_gym
-import torch
 import torch.multiprocessing as mp
-import torch.nn.functional as F
-import torch.optim as optim
 
 import wandb
-from agents.sac import SAC, SACHP
-from agents.utils import ReplayBuffer, save_checkpoint
+from agents.fmh import FMH, FMHSACHP, data_func
+from agents.sac.sac import SAC
+from agents.utils import gif
 
 if __name__ == "__main__":
     mp.set_start_method('spawn')
@@ -26,45 +24,43 @@ if __name__ == "__main__":
                         help="Name of the run")
     parser.add_argument("-e", "--env", required=True,
                         help="Name of the gym environment")
+    parser.add_argument("-o", "--obs_idx", required=True,
+                        help="Name of the gym environment")
     args = parser.parse_args()
     device = "cuda" if args.cuda else "cpu"
 
     # Input Experiment Hyperparameters
-    hp = SACHP(
+    hp = FMHSACHP(
         EXP_NAME=args.name,
         DEVICE=device,
         ENV_NAME=args.env,
+        WORKER_OBS_IDX=[int(idx) for idx in args.obs_idx.split(',')], 
         N_ROLLOUT_PROCESSES=3,
         LEARNING_RATE=0.0001,
         EXP_GRAD_RATIO=10,
-        BATCH_SIZE=256,
+        BATCH_SIZE=1024,
         GAMMA=0.95,
         REWARD_STEPS=3,
         ALPHA=0.015,
         LOG_SIG_MAX=2,
         LOG_SIG_MIN=-20,
         EPSILON=1e-6,
-        REPLAY_SIZE=5000000,
-        REPLAY_INITIAL=100000,
+        REPLAY_SIZE=1000000,
+        REPLAY_INITIAL=1024,
         SAVE_FREQUENCY=100000,
-        GIF_FREQUENCY=100000,
-        TOTAL_GRAD_STEPS=2000000
+        GIF_FREQUENCY=10000,
+        TOTAL_GRAD_STEPS=2000000,
+        MULTI_AGENT=True,
     )
     wandb.init(project='RoboCIn-RL', name=hp.EXP_NAME, entity='robocin', config=hp.to_dict())
     current_time = datetime.datetime.now().strftime('%b-%d_%H-%M-%S')
     tb_path = os.path.join('runs', current_time + '_'
                            + hp.ENV_NAME + '_' + hp.EXP_NAME)
 
-    # Training
-    sac = SAC(hp)
-    buffer = ReplayBuffer(buffer_size=hp.REPLAY_SIZE,
-                          observation_space=hp.observation_space,
-                          action_space=hp.action_space,
-                          device=hp.DEVICE
-                          )
-
+    # Method instace
+    fmh = FMH(methods=[SAC]*hp.N_AGENTS, hp=hp)
     # Playing
-    sac.share_memory()
+    fmh.share_memory()
     exp_queue = mp.Queue(maxsize=hp.EXP_GRAD_RATIO)
     finish_event = mp.Event()
     gif_req_m = mp.Value('i', -1)
@@ -73,7 +69,7 @@ if __name__ == "__main__":
         data_proc = mp.Process(
             target=data_func,
             args=(
-                pi,
+                fmh,
                 device,
                 exp_queue,
                 finish_event,
@@ -85,20 +81,11 @@ if __name__ == "__main__":
         data_proc_list.append(data_proc)
 
     # Training
-    tgt_Q = TargetCritic(Q)
-    pi_opt = optim.Adam(pi.parameters(), lr=hp.LEARNING_RATE)
-    Q_opt = optim.Adam(Q.parameters(), lr=hp.LEARNING_RATE)
-    alpha_optim = optim.Adam([log_alpha], lr=hp.LEARNING_RATE)
-    buffer = ReplayBuffer(buffer_size=hp.REPLAY_SIZE,
-                          observation_space=hp.observation_space,
-                          action_space=hp.action_space,
-                          device=hp.DEVICE
-                          )
     n_grads = 0
     n_samples = 0
     n_episodes = 0
     best_reward = None
-    last_gif = None
+    last_gif = 0
 
     try:
         while n_grads < hp.TOTAL_GRAD_STEPS:
@@ -121,63 +108,18 @@ if __name__ == "__main__":
                     ep_infos.append(logs)
                     n_episodes += 1
                 else:
-                    if safe_exp.last_state is not None:
-                        last_state = safe_exp.last_state
-                    else:
-                        last_state = safe_exp.state
-                    buffer.add(
-                        obs=safe_exp.state,
-                        next_obs=last_state,
-                        action=safe_exp.action,
-                        reward=safe_exp.reward,
-                        done=False if safe_exp.last_state is not None else True
-                    )
+                    fmh.experience(safe_exp)
                     new_samples += 1
             n_samples += new_samples
             sample_time = time.perf_counter()
 
             # Only start training after buffer is larger than initial value
-            if buffer.size() < hp.REPLAY_INITIAL:
+            if fmh.replay_buffers[0].size() < hp.REPLAY_INITIAL:
                 continue
 
-            # Sample a batch and load it as a tensor on device
-            batch = buffer.sample(hp.BATCH_SIZE)
-            pi_loss, Q_loss1, Q_loss2, log_pi = loss_sac(alpha,
-                                                         hp.GAMMA**hp.REWARD_STEPS,
-                                                         batch, Q, pi,
-                                                         tgt_Q, device)
-
-            # train Entropy parameter
-
-            alpha_loss = -(log_alpha * (log_pi + target_entropy).detach())
-            alpha_loss = alpha_loss.mean()
-
-            alpha_optim.zero_grad()
-            alpha_loss.backward()
-            alpha_optim.step()
-
-            alpha = log_alpha.exp()
-            alpha_tlogs = alpha.clone()
-            metrics["train/loss_alpha"] = alpha_loss.cpu().detach().numpy()
-            metrics["train/alpha"] = alpha.cpu().detach().numpy()
-
-            # train actor - Maximize Q value received over every S
-            pi_opt.zero_grad()
-            pi_loss.backward()
-            pi_opt.step()
-            metrics["train/loss_pi"] = pi_loss.cpu().detach().numpy()
-
-            # train critic
-            Q_loss = Q_loss1 + Q_loss2
-            Q_opt.zero_grad()
-            Q_loss.backward()
-            Q_opt.step()
-
-            metrics["train/loss_Q1"] = Q_loss1.cpu().detach().numpy()
-            metrics["train/loss_Q2"] = Q_loss2.cpu().detach().numpy()
-
-            # Sync target networks
-            tgt_Q.sync(alpha=1 - 1e-3)
+            # Update networks and log metrics
+            training_metrics = fmh.update()
+            metrics.update(training_metrics)
 
             n_grads += 1
             grad_time = time.perf_counter()
@@ -187,28 +129,23 @@ if __name__ == "__main__":
             metrics['counters/samples'] = n_samples
             metrics['counters/grads'] = n_grads
             metrics['counters/episodes'] = n_episodes
-            metrics["counters/buffer_len"] = buffer.size()
+            metrics["counters/buffer_len"] = fmh.replay_buffers[0].size()
 
             if ep_infos:
                 for key in ep_infos[0].keys():
                     metrics[key] = np.mean([info[key] for info in ep_infos])
 
+            # Check if there is a new gif
+            gifs = [int(file.split('.')[0]) for file in os.listdir(hp.GIF_PATH)]
+            gifs.sort()
+            if gifs[-1] > last_gif:
+                last_gif = gifs[-1]
+                path = os.path.join(hp.GIF_PATH, f"{last_gif:09d}.gif")
+                metrics.update({"gif": wandb.Video(path, fps=10, format="gif")})
             # Log metrics
             wandb.log(metrics)
             if hp.SAVE_FREQUENCY and n_grads % hp.SAVE_FREQUENCY == 0:
-                save_checkpoint(
-                    hp=hp,
-                    metrics={
-                        'alpha': alpha,
-                        'n_samples': n_samples,
-                        'n_grads': n_grads,
-                        'n_episodes': n_episodes
-                    },
-                    pi=pi,
-                    Q=Q,
-                    pi_opt=pi_opt,
-                    Q_opt=Q_opt
-                )
+                fmh.save()
 
             if hp.GIF_FREQUENCY and n_grads % hp.GIF_FREQUENCY == 0:
                 gif_req_m.value = n_grads
@@ -230,6 +167,6 @@ if __name__ == "__main__":
             p.join()
 
         del(exp_queue)
-        del(pi)
+        del(fmh)
 
         finish_event.set()
