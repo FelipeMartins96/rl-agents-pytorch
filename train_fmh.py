@@ -36,7 +36,7 @@ if __name__ == "__main__":
         ENV_NAME=args.env,
         WORKER_OBS_IDX=[int(idx) for idx in args.obs_idx.split(',')], 
         OBJECTIVE_SIZE=2,
-        N_ROLLOUT_PROCESSES=2,
+        N_ROLLOUT_PROCESSES=4,
         LEARNING_RATE=0.0001,
         EXP_GRAD_RATIO=10,
         BATCH_SIZE=1024,
