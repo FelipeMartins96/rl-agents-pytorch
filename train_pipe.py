@@ -72,7 +72,8 @@ def rollout(
                             gif_idx = i
                             gif_req_m.value = -1
                     s[i] = envs.reset(i)
-                    info[i]['fps'] = ep_steps / (time.perf_counter() - st_time[i])
+                    info[i]['fps'] = ep_steps / \
+                        (time.perf_counter() - st_time[i])
                     info[i]['ep_steps'] = ep_steps[i]
                     info[i]['ep_rw'] = ep_rw[i]
                     queue_m.put(info[i])
@@ -187,7 +188,9 @@ def main(args):
             batch = buffer.sample(hp.BATCH_SIZE)
             metrics["train/loss_pi"], metrics["train/loss_Q1"], \
                 metrics["train/loss_Q2"], metrics["train/loss_alpha"], \
-                metrics["train/alpha"] = sac.update(batch=batch)
+                metrics["train/alpha"], metrics["train/reward"] = sac.update(
+                    batch=batch
+            )
 
             n_grads += 1
             grad_time = time.perf_counter()

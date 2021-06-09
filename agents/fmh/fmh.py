@@ -1,14 +1,14 @@
-from agents.utils.buffer import ReplayBuffer
 import copy
 import os
 import time
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List
 
 import gym
 import numpy as np
 import torch
 from agents.ddpg.networks import TargetActor, TargetCritic
+from agents.utils.buffer import ReplayBuffer
 from agents.utils.experience import ExperienceFirstLast
 from agents.utils.experiment import HyperParameters
 from agents.utils.gif import generate_gif
@@ -18,7 +18,6 @@ def data_func(
     trainer,
     queue_m,
     finish_event_m,
-    sigma_m,
     gif_req_m,
     hp
 ):
@@ -56,12 +55,13 @@ def data_func(
                 ep_steps += 1
 
                 next_manager_obs = s[0]
-                next_workers_obs = trainer.workers_obs(
-                    obs_env=s_next, objectives=objectives)
+                next_workers_obs = trainer.workers_obs(obs_env=s_next,
+                                                       objectives=objectives)
 
                 manager_rewards = trainer.manager_reward(r)
                 workers_rewards = trainer.workers_rewards(
-                    n_obs_env=s_next, objectives=objectives)
+                    n_obs_env=s_next, objectives=objectives
+                )
 
                 obs = [manager_obs] + workers_obs
                 actions = [manager_action] + workers_actions
@@ -114,6 +114,9 @@ class FMHSACHP(FMHHP):
 
 class FMH:
 
+    last_manager_action = None
+    action_idx = 0
+
     def __init__(self, methods: List, hp: FMHHP) -> None:
 
         self.manager = methods[0](hp)
@@ -123,7 +126,6 @@ class FMH:
         for method in methods[1:]:
             self.workers.append(method(hp))
 
-        self.hp = hp
         self.replay_buffers = []
         for _ in range(methods):
             buffer = ReplayBuffer(buffer_size=hp.REPLAY_SIZE,
@@ -132,6 +134,8 @@ class FMH:
                                   device=hp.DEVICE
                                   )
             self.replay_buffers.append(buffer)
+
+        self.hp = hp
 
     def share_memory(self):
         self.manager.share_memory()
@@ -158,8 +162,16 @@ class FMH:
             observations.append(worker_obs)
         return observations
 
-    def manager_action(self, obs_manager):
-        return self.manager.get_action(obs_manager)
+    def manager_action(self, obs_manager, train=True):
+        if self.action_idx % self.hp.PERSIST_COMM == 0 or not train:
+            action = self.manager.get_action(obs_manager)
+            if train:
+                self.last_manager_action = action
+                self.action_idx += 1
+        else:
+            action = self.last_manager_action
+            self.action_idx += 1
+        return action
 
     def workers_action(self, obs_workers):
         return [worker(obs) for worker, obs in zip(self.workers, obs_workers)]
@@ -215,4 +227,18 @@ class FMH:
                             name=f'agent_{i}')
 
     def update(self):
-        pass
+        metrics = {}
+        agents = [self.manager] + self.workers
+        for i, agent in enumerate(agents):
+            batch = self.replay_buffers[i].sample(self.hp.BATCH_SIZE)
+            loss = agent.update(batch)
+            if loss:
+                metrics.update({
+                    f"agent_{i}/p_loss": loss[0],
+                    f"agent_{i}/q1_loss": loss[1],
+                    f"agent_{i}/q2_loss": loss[2],
+                    f"agent_{i}/loss_alpha": loss[3],
+                    f"agent_{i}/alpha": loss[4],
+                    f"agent_{i}/mean(rew)": loss[5]
+                })
+        return metrics

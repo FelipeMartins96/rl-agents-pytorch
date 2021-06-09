@@ -3,13 +3,14 @@ import numpy as np
 import PIL
 import os
 
+
 def generate_gif(
-    env, 
-    filepath, 
-    pi, 
-    hp, 
-    max_episode_steps=1200, 
-    resize_to=None, 
+    env,
+    filepath,
+    pi,
+    hp,
+    max_episode_steps=1200,
+    resize_to=None,
     duration=25
 ):
     """
@@ -24,22 +25,30 @@ def generate_gif(
     resize_to : tuple of ints, optional
     duration : float, optional
     """
-    
+
     # collect frames
     MA_METHODS = ['maddpg_async', 'fmh_async']
     frames = []
     s = env.reset()
     for t in range(max_episode_steps):
+
         if hp.AGENT not in MA_METHODS:
             s_v = torch.Tensor(s).to(hp.DEVICE)
             a = pi.get_action(s_v)
             s_next, r, done, info = env.step(a)
+
         elif hp.AGENT == "maddpg_async":
             a = [agent.action(obs) for agent, obs in zip(pi, s)]
             s_next, r, done, info = env.step(a)
+
         elif hp.AGENT == "fmh_async":
-            a = [agent.action(obs) for agent, obs in zip(pi, s)]
-            s_next, r, done, info = env.step(a)
+            manager_obs = s[0]
+            manager_action = pi.manager_action(manager_obs)
+            objectives = manager_action.reshape((-1, hp.OBJECTIVE_SIZE))
+            workers_obs = pi.workers_obs(obs_env=s, objectives=objectives)
+            workers_actions = pi.workers_action(workers_obs)
+            s_next, r, done, info = env.step(workers_actions)
+
         # store frame
         frame = env.render(mode='rgb_array')
         frame = PIL.Image.fromarray(frame)
@@ -67,10 +76,10 @@ def generate_gif(
 
     # generate gif
     frames[0].save(
-        fp=filepath, 
-        format='GIF', 
-        append_images=frames[1:], 
+        fp=filepath,
+        format='GIF',
+        append_images=frames[1:],
         save_all=True,
-        duration=duration, 
+        duration=duration,
         loop=0
     )

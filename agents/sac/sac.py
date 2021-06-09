@@ -5,6 +5,7 @@ import time
 from dataclasses import dataclass
 
 import gym
+import numpy as np
 import torch
 import torch.nn.functional as F
 from agents.sac import GaussianPolicy, QNetwork, TargetCritic
@@ -255,4 +256,6 @@ class SAC:
         # Sync target networks
         self.tgt_Q.sync(alpha=1 - 1e-3)
 
-        return pi_loss, Q_loss1, Q_loss2, alpha_loss, alpha.cpu().detach().numpy()
+        reward_mean = np.mean(batch.rewards)
+        return pi_loss, Q_loss1, Q_loss2, alpha_loss,\
+            alpha.cpu().detach().numpy(), reward_mean
