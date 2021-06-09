@@ -27,7 +27,7 @@ def generate_gif(
     """
 
     # collect frames
-    MA_METHODS = ['maddpg_async', 'fmh_async']
+    MA_METHODS = ['maddpg_async', 'fmhsac_async']
     frames = []
     s = env.reset()
     for t in range(max_episode_steps):
@@ -41,7 +41,7 @@ def generate_gif(
             a = [agent.action(obs) for agent, obs in zip(pi, s)]
             s_next, r, done, info = env.step(a)
 
-        elif hp.AGENT == "fmh_async":
+        else:
             manager_obs = s[0]
             manager_action = pi.manager_action(manager_obs)
             objectives = manager_action.reshape((-1, hp.OBJECTIVE_SIZE))

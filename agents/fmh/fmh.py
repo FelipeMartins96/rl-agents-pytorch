@@ -50,7 +50,6 @@ def data_func(
                 workers_obs = trainer.workers_obs(
                     obs_env=s, objectives=objectives)
                 workers_actions = trainer.workers_action(workers_obs)
-
                 s_next, r, done, info = env.step(workers_actions)
                 ep_steps += 1
 
@@ -98,8 +97,17 @@ class FMHHP(HyperParameters):
     AGENT: str = "fmh_async"
     PERSIST_COMM: int = 8
     WORKER_OBS_IDX: list = None
-    WORKER_REW_METHOD: function = lambda x, y: np.linalg.norm(x-y)
-    MANAGER_REW_METHOD: function = np.sum
+    OBJECTIVE_SIZE: int = None
+
+    def MANAGER_REW_METHOD(self, x):
+        return np.sum(x)
+
+    def WORKER_REW_METHOD(self, x, y):
+        return np.linalg.norm(x-y)
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.WORKER_N_OBS = len(self.WORKER_OBS_IDX) + self.OBJECTIVE_SIZE
 
 
 @dataclass
@@ -109,7 +117,6 @@ class FMHSACHP(FMHHP):
     LOG_SIG_MAX: int = None
     LOG_SIG_MIN: int = None
     EPSILON: float = None
-    OBJECTIVE_SIZE: int = None
 
 
 class FMH:
@@ -119,15 +126,27 @@ class FMH:
 
     def __init__(self, methods: List, hp: FMHHP) -> None:
 
-        self.manager = methods[0](hp)
+        hps = list()
+        manager_hp = copy.deepcopy(hp)
+        manager_hp.N_ACTS = (manager_hp.N_AGENTS-1)*manager_hp.OBJECTIVE_SIZE
+        manager_hp.action_space.shape = (manager_hp.N_ACTS,)
+        self.manager = methods[0](manager_hp)
         self.manager.gamma = 0.75
+        manager_hp.GAMMA = 0.75
+        hps.append(manager_hp)
+
 
         self.workers = []
         for method in methods[1:]:
-            self.workers.append(method(hp))
+            worker_hp = copy.deepcopy(hp)
+            worker_hp.N_OBS = hp.WORKER_N_OBS
+            worker_hp.observation_space.shape = (worker_hp.N_OBS, )
+            hps.append(worker_hp)
+            self.workers.append(method(worker_hp))
 
+        self.hp = hp
         self.replay_buffers = []
-        for _ in range(methods):
+        for hp in hps:
             buffer = ReplayBuffer(buffer_size=hp.REPLAY_SIZE,
                                   observation_space=hp.observation_space,
                                   action_space=hp.action_space,
@@ -135,7 +154,6 @@ class FMH:
                                   )
             self.replay_buffers.append(buffer)
 
-        self.hp = hp
 
     def share_memory(self):
         self.manager.share_memory()
@@ -174,9 +192,10 @@ class FMH:
         return action
 
     def workers_action(self, obs_workers):
-        return [worker(obs) for worker, obs in zip(self.workers, obs_workers)]
+        return [worker.get_action(obs) for worker, obs in zip(self.workers, obs_workers)]
 
     def experience(self, experiences):
+        i = 0
         for buffer, exp in zip(self.replay_buffers, experiences):
             done = False
             if exp.last_state is not None:
@@ -191,6 +210,7 @@ class FMH:
                 reward=exp.reward,
                 done=done
             )
+            i += 1
 
     def save_agent(self, agent, name):
         torch.save(agent.pi.state_dict(),

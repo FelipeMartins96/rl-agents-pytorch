@@ -158,6 +158,7 @@ class SAC:
                                  hp.LOG_SIG_MIN,
                                  hp.LOG_SIG_MAX, hp.EPSILON).to(self.device)
         self.Q = QNetwork(hp.N_OBS, hp.N_ACTS).to(self.device)
+
         # Entropy
         self.alpha = hp.ALPHA
         self.target_entropy = - \
@@ -255,7 +256,6 @@ class SAC:
 
         # Sync target networks
         self.tgt_Q.sync(alpha=1 - 1e-3)
-
-        reward_mean = np.mean(batch.rewards)
+        reward_mean = torch.mean(batch.rewards).cpu().numpy()
         return pi_loss, Q_loss1, Q_loss2, alpha_loss,\
             alpha.cpu().detach().numpy(), reward_mean

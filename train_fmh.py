@@ -35,7 +35,8 @@ if __name__ == "__main__":
         DEVICE=device,
         ENV_NAME=args.env,
         WORKER_OBS_IDX=[int(idx) for idx in args.obs_idx.split(',')], 
-        N_ROLLOUT_PROCESSES=3,
+        OBJECTIVE_SIZE=2,
+        N_ROLLOUT_PROCESSES=2,
         LEARNING_RATE=0.0001,
         EXP_GRAD_RATIO=10,
         BATCH_SIZE=1024,
@@ -58,6 +59,7 @@ if __name__ == "__main__":
                            + hp.ENV_NAME + '_' + hp.EXP_NAME)
 
     # Method instace
+    hp.N_AGENTS += 1
     fmh = FMH(methods=[SAC]*hp.N_AGENTS, hp=hp)
     # Playing
     fmh.share_memory()
@@ -70,7 +72,6 @@ if __name__ == "__main__":
             target=data_func,
             args=(
                 fmh,
-                device,
                 exp_queue,
                 finish_event,
                 gif_req_m,
@@ -120,6 +121,13 @@ if __name__ == "__main__":
             # Update networks and log metrics
             training_metrics = fmh.update()
             metrics.update(training_metrics)
+            for i in range(hp.N_AGENTS-1):
+                if ep_infos:
+                    info = ep_infos[0]
+                    info_metrics = {}
+                    for key, value in info[f'ep_info/robot_{i}'].items():
+                        info_metrics[f'agent_{i}/{key}'] = value
+                    metrics.update(info_metrics)
 
             n_grads += 1
             grad_time = time.perf_counter()
@@ -133,12 +141,14 @@ if __name__ == "__main__":
 
             if ep_infos:
                 for key in ep_infos[0].keys():
-                    metrics[key] = np.mean([info[key] for info in ep_infos])
+                    if not isinstance(ep_infos[0][key], dict):
+                        metrics[key] = np.mean([info[key]
+                                               for info in ep_infos])
 
             # Check if there is a new gif
             gifs = [int(file.split('.')[0]) for file in os.listdir(hp.GIF_PATH)]
             gifs.sort()
-            if gifs[-1] > last_gif:
+            if gifs and gifs[-1] > last_gif:
                 last_gif = gifs[-1]
                 path = os.path.join(hp.GIF_PATH, f"{last_gif:09d}.gif")
                 metrics.update({"gif": wandb.Video(path, fps=10, format="gif")})
