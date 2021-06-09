@@ -10,7 +10,7 @@ import rsoccer_gym
 import torch.multiprocessing as mp
 
 import wandb
-from agents.fmh import FMH, FMHSACHP, data_func
+from agents.fmh import FMHSAC, FMHDDPG, FMHSACHP, data_func
 from agents.sac.sac import SAC
 from agents.utils import gif
 
@@ -60,7 +60,7 @@ if __name__ == "__main__":
 
     # Method instace
     hp.N_AGENTS += 1
-    fmh = FMH(methods=[SAC]*hp.N_AGENTS, hp=hp)
+    fmh = FMHSAC(methods=[SAC]*hp.N_AGENTS, hp=hp)
     # Playing
     fmh.share_memory()
     exp_queue = mp.Queue(maxsize=hp.EXP_GRAD_RATIO)

@@ -1,12 +1,16 @@
-import torch
-import collections
-import time
-import gym
 import copy
-import numpy as np
-from agents.utils import NStepTracer, OrnsteinUhlenbeckNoise, generate_gif, HyperParameters, ExperienceFirstLast
 import os
+import time
 from dataclasses import dataclass
+
+import gym
+import torch
+from agents.ddpg.networks import (DDPGActor, DDPGCritic, TargetActor,
+                                  TargetCritic)
+from agents.utils import (ExperienceFirstLast, HyperParameters, NStepTracer,
+                          OrnsteinUhlenbeckNoise, generate_gif)
+from torch.nn import functional as F
+from torch.optim import Adam
 
 
 @dataclass
@@ -83,7 +87,7 @@ def data_func(
                     ep_rw += r
 
                 # Trace NStep rewards and add to mp queue
-                if hp.MULTI_AGENT: 
+                if hp.MULTI_AGENT:
                     exp = list()
                     for i in range(hp.N_AGENTS):
                         kwargs = {
@@ -110,3 +114,69 @@ def data_func(
             info['ep_steps'] = ep_steps
             info['ep_rw'] = ep_rw
             queue_m.put(info)
+
+
+class DDPG:
+
+    def __init__(self, hp):
+        self.device = hp.DEVICE
+        # Actor-Critic
+        self.pi = DDPGActor(hp.N_OBS, hp.N_ACTS).to(self.device)
+        self.Q = DDPGCritic(hp.N_OBS, hp.N_ACTS).to(self.device)
+        # Training
+        self.tgt_Q = TargetCritic(self.Q)
+        self.tgt_pi = TargetActor(self.pi)
+        self.pi_opt = Adam(self.pi.parameters(), lr=hp.LEARNING_RATE)
+        self.Q_opt = Adam(self.Q.parameters(), lr=hp.LEARNING_RATE)
+
+        self.gamma = hp.GAMMA**hp.REWARD_STEPS
+
+    def get_action(self, observation):
+        s_v = torch.Tensor(observation).to(self.device)
+        return self.pi.get_action(s_v)
+
+    def share_memory(self):
+        self.pi.share_memory()
+        self.Q.share_memory()
+
+    def loss(self, batch):
+        state_batch = batch.observations
+        action_batch = batch.actions
+        reward_batch = batch.rewards
+        mask_batch = batch.dones.bool()
+        next_state_batch = batch.next_observations
+
+        next_state_action = self.tgt_pi(next_state_batch)
+        qf_next_target = self.tgt_Q(next_state_batch, next_state_action)
+        qf_next_target[mask_batch] = 0.0
+        next_q_value = reward_batch + self.gamma * qf_next_target
+        qf = self.Q(state_batch, action_batch)
+        Q_loss = F.mse_loss(qf, next_q_value.detach())
+
+        pi = self.pi(state_batch)
+        pi_loss = self.Q(state_batch, pi)
+        pi_loss = -pi_loss.mean()
+
+        return pi_loss, Q_loss
+
+    def update(self, batch):
+        pi_loss, Q_loss = self.loss(batch)
+
+        # train critic
+        Q_loss = Q_loss
+        self.Q_opt.zero_grad()
+        Q_loss.backward()
+        self.Q_opt.step()
+
+        # train actor - Maximize Q value received over every S
+        self.pi_opt.zero_grad()
+        pi_loss.backward()
+        self.pi_opt.step()
+
+        pi_loss = pi_loss.cpu().detach().numpy()
+        Q_loss = Q_loss.cpu().detach().numpy()
+
+        # Sync target networks
+        self.tgt_Q.sync(alpha=1 - 1e-3)
+        reward_mean = torch.mean(batch.rewards).cpu().numpy()
+        return pi_loss, Q_loss, reward_mean

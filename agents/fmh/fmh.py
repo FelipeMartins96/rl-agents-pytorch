@@ -135,7 +135,6 @@ class FMH:
         manager_hp.GAMMA = 0.75
         hps.append(manager_hp)
 
-
         self.workers = []
         for method in methods[1:]:
             worker_hp = copy.deepcopy(hp)
@@ -153,7 +152,6 @@ class FMH:
                                   device=hp.DEVICE
                                   )
             self.replay_buffers.append(buffer)
-
 
     def share_memory(self):
         self.manager.share_memory()
@@ -247,6 +245,12 @@ class FMH:
                             name=f'agent_{i}')
 
     def update(self):
+        raise NotImplementedError
+
+
+class FMHSAC(FMH):
+
+    def update(self):
         metrics = {}
         agents = [self.manager] + self.workers
         for i, agent in enumerate(agents):
@@ -260,5 +264,22 @@ class FMH:
                     f"agent_{i}/loss_alpha": loss[3],
                     f"agent_{i}/alpha": loss[4],
                     f"agent_{i}/mean(rew)": loss[5]
+                })
+        return metrics
+
+
+class FMHDDPG(FMH):
+
+    def update(self):
+        metrics = {}
+        agents = [self.manager] + self.workers
+        for i, agent in enumerate(agents):
+            batch = self.replay_buffers[i].sample(self.hp.BATCH_SIZE)
+            loss = agent.update(batch)
+            if loss:
+                metrics.update({
+                    f"agent_{i}/p_loss": loss[0],
+                    f"agent_{i}/q_loss": loss[1],
+                    f"agent_{i}/mean(rew)": loss[2]
                 })
         return metrics
