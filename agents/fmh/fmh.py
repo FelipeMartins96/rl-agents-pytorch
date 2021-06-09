@@ -103,7 +103,7 @@ class FMHHP(HyperParameters):
         return np.sum(x)
 
     def WORKER_REW_METHOD(self, x, y):
-        return np.linalg.norm(x-y)
+        return -np.linalg.norm(x-y)
 
     def __post_init__(self):
         super().__post_init__()
