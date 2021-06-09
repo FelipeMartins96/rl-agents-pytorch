@@ -9,14 +9,16 @@ import numpy as np
 import rsoccer_gym
 import torch
 import torch.multiprocessing as mp
+import torch.nn.functional as F
+import torch.optim as optim
+
 import wandb
-
 from agents.sac import SAC, SACHP
-from agents.utils import (NStepTracer, ReplayBuffer, generate_gif, gif,
-                          save_checkpoint, MultiEnv)
+from agents.utils import ReplayBuffer, save_checkpoint
 
-
-def get_args():
+if __name__ == "__main__":
+    mp.set_start_method('spawn')
+    os.environ['OMP_NUM_THREADS'] = "1"
     parser = argparse.ArgumentParser()
     parser.add_argument("--cuda", default=False,
                         action="store_true", help="Enable cuda")
@@ -25,67 +27,8 @@ def get_args():
     parser.add_argument("-e", "--env", required=True,
                         help="Name of the gym environment")
     args = parser.parse_args()
-    return args
-
-
-def rollout(
-    agent,
-    device,
-    queue_m,
-    finish_event_m,
-    gif_req_m,
-    hp
-):
-    envs = MultiEnv(hp.ENV_NAME, hp.N_ROLLOUT_PROCESSES)
-    tracer = [NStepTracer(n=hp.REWARD_STEPS, gamma=hp.GAMMA)
-              ]*hp.N_ROLLOUT_PROCESSES
-
-    with torch.no_grad():
-        # Check for generate gif request
-        gif_idx = -1
-
-        s = envs.reset()
-        ep_steps = np.array([0]*hp.N_ROLLOUT_PROCESSES)
-        ep_rw = np.array([0]*hp.N_ROLLOUT_PROCESSES, dtype=float)
-        st_time = [time.perf_counter()]*hp.N_ROLLOUT_PROCESSES
-        while not finish_event_m.is_set():
-            # Step the environment
-            s_v = torch.Tensor(s).to(device)
-            a = agent.pi.get_action(s_v)
-            s_next, r, done, info = envs.step(a)
-            if gif_idx != -1:
-                envs.render(mode='rgb_array', env_idx=gif_idx)
-
-            ep_steps += 1
-            ep_rw += r
-            # Trace NStep rewards and add to mp queue
-            for i in range(hp.N_ROLLOUT_PROCESSES):
-                tracer[i].add(s[i], a[i], r[i], done[i])
-                while tracer[i]:
-                    queue_m.put(tracer[i].pop())
-
-                if done[i]:
-                    if gif_idx != -1:
-                        gif_idx = -1
-                    with gif_req_m.get_lock():
-                        if gif_req_m.value != -1:
-                            gif_idx = i
-                            gif_req_m.value = -1
-                    s[i] = envs.reset(i)
-                    info[i]['fps'] = ep_steps / (time.perf_counter() - st_time[i])
-                    info[i]['ep_steps'] = ep_steps[i]
-                    info[i]['ep_rw'] = ep_rw[i]
-                    queue_m.put(info[i])
-                    ep_steps[i] = 0
-                    ep_rw[i] = 0
-                    st_time[i] = time.perf_counter()
-                else:
-                    s[i] = s_next[i]
-
-
-def main(args):
     device = "cuda" if args.cuda else "cpu"
-    mp.set_start_method('spawn')
+
     # Input Experiment Hyperparameters
     hp = SACHP(
         EXP_NAME=args.name,
@@ -101,17 +44,17 @@ def main(args):
         LOG_SIG_MAX=2,
         LOG_SIG_MIN=-20,
         EPSILON=1e-6,
-        REPLAY_SIZE=100000,
-        REPLAY_INITIAL=512,
+        REPLAY_SIZE=5000000,
+        REPLAY_INITIAL=100000,
         SAVE_FREQUENCY=100000,
         GIF_FREQUENCY=100000,
-        TOTAL_GRAD_STEPS=1000000
+        TOTAL_GRAD_STEPS=2000000
     )
-    wandb.init(project='RoboCIn-RL', name=hp.EXP_NAME,
-               entity='robocin', config=hp.to_dict())
+    wandb.init(project='RoboCIn-RL', name=hp.EXP_NAME, entity='robocin', config=hp.to_dict())
     current_time = datetime.datetime.now().strftime('%b-%d_%H-%M-%S')
     tb_path = os.path.join('runs', current_time + '_'
                            + hp.ENV_NAME + '_' + hp.EXP_NAME)
+
     # Training
     sac = SAC(hp)
     buffer = ReplayBuffer(buffer_size=hp.REPLAY_SIZE,
@@ -125,24 +68,38 @@ def main(args):
     exp_queue = mp.Queue(maxsize=hp.EXP_GRAD_RATIO)
     finish_event = mp.Event()
     gif_req_m = mp.Value('i', -1)
-    data_proc = mp.Process(
-        target=rollout,
-        args=(
-            sac,
-            device,
-            exp_queue,
-            finish_event,
-            gif_req_m,
-            hp
+    data_proc_list = []
+    for _ in range(hp.N_ROLLOUT_PROCESSES):
+        data_proc = mp.Process(
+            target=data_func,
+            args=(
+                pi,
+                device,
+                exp_queue,
+                finish_event,
+                gif_req_m,
+                hp
+            )
         )
-    )
-    data_proc.start()
+        data_proc.start()
+        data_proc_list.append(data_proc)
 
+    # Training
+    tgt_Q = TargetCritic(Q)
+    pi_opt = optim.Adam(pi.parameters(), lr=hp.LEARNING_RATE)
+    Q_opt = optim.Adam(Q.parameters(), lr=hp.LEARNING_RATE)
+    alpha_optim = optim.Adam([log_alpha], lr=hp.LEARNING_RATE)
+    buffer = ReplayBuffer(buffer_size=hp.REPLAY_SIZE,
+                          observation_space=hp.observation_space,
+                          action_space=hp.action_space,
+                          device=hp.DEVICE
+                          )
     n_grads = 0
     n_samples = 0
     n_episodes = 0
     best_reward = None
     last_gif = None
+
     try:
         while n_grads < hp.TOTAL_GRAD_STEPS:
             metrics = {}
@@ -185,9 +142,42 @@ def main(args):
 
             # Sample a batch and load it as a tensor on device
             batch = buffer.sample(hp.BATCH_SIZE)
-            metrics["train/loss_pi"], metrics["train/loss_Q1"], \
-                metrics["train/loss_Q2"], metrics["train/loss_alpha"], \
-                metrics["train/alpha"] = sac.update(batch=batch)
+            pi_loss, Q_loss1, Q_loss2, log_pi = loss_sac(alpha,
+                                                         hp.GAMMA**hp.REWARD_STEPS,
+                                                         batch, Q, pi,
+                                                         tgt_Q, device)
+
+            # train Entropy parameter
+
+            alpha_loss = -(log_alpha * (log_pi + target_entropy).detach())
+            alpha_loss = alpha_loss.mean()
+
+            alpha_optim.zero_grad()
+            alpha_loss.backward()
+            alpha_optim.step()
+
+            alpha = log_alpha.exp()
+            alpha_tlogs = alpha.clone()
+            metrics["train/loss_alpha"] = alpha_loss.cpu().detach().numpy()
+            metrics["train/alpha"] = alpha.cpu().detach().numpy()
+
+            # train actor - Maximize Q value received over every S
+            pi_opt.zero_grad()
+            pi_loss.backward()
+            pi_opt.step()
+            metrics["train/loss_pi"] = pi_loss.cpu().detach().numpy()
+
+            # train critic
+            Q_loss = Q_loss1 + Q_loss2
+            Q_opt.zero_grad()
+            Q_loss.backward()
+            Q_opt.step()
+
+            metrics["train/loss_Q1"] = Q_loss1.cpu().detach().numpy()
+            metrics["train/loss_Q2"] = Q_loss2.cpu().detach().numpy()
+
+            # Sync target networks
+            tgt_Q.sync(alpha=1 - 1e-3)
 
             n_grads += 1
             grad_time = time.perf_counter()
@@ -209,15 +199,15 @@ def main(args):
                 save_checkpoint(
                     hp=hp,
                     metrics={
-                        'alpha': sac.alpha,
+                        'alpha': alpha,
                         'n_samples': n_samples,
                         'n_grads': n_grads,
                         'n_episodes': n_episodes
                     },
-                    pi=sac.pi,
-                    Q=sac.Q,
-                    pi_opt=sac.pi_opt,
-                    Q_opt=sac.Q_opt
+                    pi=pi,
+                    Q=Q,
+                    pi_opt=pi_opt,
+                    Q_opt=Q_opt
                 )
 
             if hp.GIF_FREQUENCY and n_grads % hp.GIF_FREQUENCY == 0:
@@ -235,14 +225,11 @@ def main(args):
         print('queue is empty')
 
         print("Waiting for threads to finish...")
-        data_proc.terminate()
-        data_proc.join()
+        for p in data_proc_list:
+            p.terminate()
+            p.join()
 
         del(exp_queue)
-        del(sac)
+        del(pi)
 
         finish_event.set()
-
-
-if __name__ == "__main__":
-    main(get_args())

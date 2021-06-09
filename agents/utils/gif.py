@@ -26,14 +26,18 @@ def generate_gif(
     """
     
     # collect frames
+    MA_METHODS = ['maddpg_async', 'fmh_async']
     frames = []
     s = env.reset()
     for t in range(max_episode_steps):
-        if hp.AGENT != "maddpg_async":
+        if hp.AGENT not in MA_METHODS:
             s_v = torch.Tensor(s).to(hp.DEVICE)
             a = pi.get_action(s_v)
             s_next, r, done, info = env.step(a)
-        else:
+        elif hp.AGENT == "maddpg_async":
+            a = [agent.action(obs) for agent, obs in zip(pi, s)]
+            s_next, r, done, info = env.step(a)
+        elif hp.AGENT == "fmh_async":
             a = [agent.action(obs) for agent, obs in zip(pi, s)]
             s_next, r, done, info = env.step(a)
         # store frame

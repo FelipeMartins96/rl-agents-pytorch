@@ -151,17 +151,17 @@ def loss_sac(alpha, gamma, batch, crt_net, act_net,
 class SAC:
 
     def __init__(self, hp):
-        device = hp.DEVICE
+        self.device = hp.DEVICE
         # Actor-Critic
         self.pi = GaussianPolicy(hp.N_OBS, hp.N_ACTS,
                                  hp.LOG_SIG_MIN,
-                                 hp.LOG_SIG_MAX, hp.EPSILON).to(device)
-        self.Q = QNetwork(hp.N_OBS, hp.N_ACTS).to(device)
+                                 hp.LOG_SIG_MAX, hp.EPSILON).to(self.device)
+        self.Q = QNetwork(hp.N_OBS, hp.N_ACTS).to(self.device)
         # Entropy
         self.alpha = hp.ALPHA
         self.target_entropy = - \
-            torch.prod(torch.Tensor(hp.N_ACTS).to(device)).item()
-        self.log_alpha = torch.zeros(1, requires_grad=True, device=device)
+            torch.prod(torch.Tensor(hp.N_ACTS).to(self.device)).item()
+        self.log_alpha = torch.zeros(1, requires_grad=True, device=self.device)
         # Training
         self.tgt_Q = TargetCritic(self.Q)
         self.pi_opt = Adam(self.pi.parameters(), lr=hp.LEARNING_RATE)
@@ -169,8 +169,11 @@ class SAC:
         self.alpha_optim = Adam([self.log_alpha], lr=hp.LEARNING_RATE)
 
         self.gamma = hp.GAMMA**hp.REWARD_STEPS
-        self.hp = hp
-    
+
+    def get_action(self, observation):
+        s_v = torch.Tensor(observation).to(self.device)
+        return self.pi.get_action(s_v)
+
     def share_memory(self):
         self.pi.share_memory()
         self.Q.share_memory()
@@ -219,7 +222,7 @@ class SAC:
 
         return policy_loss, qf1_loss, qf2_loss, log_pi
 
-    def update(self, batch, metrics):
+    def update(self, batch):
         pi_loss, Q_loss1, Q_loss2, log_pi = self.loss(batch)
         # train Entropy parameter
 
@@ -233,7 +236,6 @@ class SAC:
 
         alpha = self.log_alpha.exp()
         alpha_loss = alpha_loss.cpu().detach().numpy()
-        metrics["train/alpha"] = alpha.cpu().detach().numpy()
 
         # train actor - Maximize Q value received over every S
         self.pi_opt.zero_grad()
