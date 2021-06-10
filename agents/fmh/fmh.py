@@ -212,6 +212,8 @@ class FMH:
         if self.action_idx % persist_comm == 0 or not train:
             action = self.manager.get_action(obs_manager)
             if train:
+                if self.update_index < 20000:
+                    action = action/4
                 self.last_manager_action = action
                 self.action_idx += 1
         else:
