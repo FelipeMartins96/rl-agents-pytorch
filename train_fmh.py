@@ -122,7 +122,7 @@ if __name__ == "__main__":
             sample_time = time.perf_counter()
 
             # Only start training after buffer is larger than initial value
-            if fmh.replay_buffers[0].size() < hp.REPLAY_INITIAL:
+            if fmh.replay_buffers[1].size() < hp.REPLAY_INITIAL:
                 continue
 
             # Update networks and log metrics
