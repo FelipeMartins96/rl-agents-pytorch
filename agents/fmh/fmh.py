@@ -1,3 +1,4 @@
+from agents.utils.noise import OrnsteinUhlenbeckNoise
 import copy
 import os
 import time
@@ -18,10 +19,17 @@ def data_func(
     trainer,
     queue_m,
     finish_event_m,
+    sigma_m,
     gif_req_m,
     hp
 ):
     env = gym.make(hp.ENV_NAME)
+    noise = OrnsteinUhlenbeckNoise(
+        sigma=sigma_m.value,
+        theta=hp.NOISE_THETA,
+        min_value=-1,
+        max_value=1
+    )
 
     with torch.no_grad():
         while not finish_event_m.is_set():
@@ -38,6 +46,8 @@ def data_func(
 
             done = False
             s = env.reset()
+            noise.reset()
+            noise.sigma = sigma_m.value
             info = {}
             ep_steps = 0
             ep_rw = [0]*hp.N_AGENTS
@@ -46,6 +56,7 @@ def data_func(
                 # Step the environment
                 manager_obs = s[0]
                 manager_action = trainer.manager_action(manager_obs)
+                manager_action = noise(manager_action)
                 objectives = manager_action.reshape((-1, hp.OBJECTIVE_SIZE))
                 workers_obs = trainer.workers_obs(
                     obs_env=s, objectives=objectives)
@@ -89,6 +100,7 @@ def data_func(
             info['fps'] = ep_steps / (time.perf_counter() - st_time)
             info['ep_steps'] = ep_steps
             info['ep_rw'] = ep_rw
+            info['noise'] = noise.sigma
             queue_m.put(info)
 
 
@@ -98,6 +110,11 @@ class FMHHP(HyperParameters):
     PERSIST_COMM: int = 8
     WORKER_OBS_IDX: list = None
     OBJECTIVE_SIZE: int = None
+    NOISE_SIGMA_INITIAL: float = None  # Initial action noise sigma
+    NOISE_THETA: float = None
+    NOISE_SIGMA_DECAY: float = None  # Action noise sigma decay
+    NOISE_SIGMA_MIN: float = None
+    NOISE_SIGMA_GRAD_STEPS: float = None  # Decay action noise every _ grad steps
 
     def MANAGER_REW_METHOD(self, x):
         return np.sum(x)
@@ -165,7 +182,7 @@ class FMH:
         rew_function = self.hp.WORKER_REW_METHOD
         rewards = list()
         for next_obs, objective in zip(n_obs_env, objectives):
-            reached_obj = next_obs[indexes]
+            reached_obj = next_obs[indexes[:self.hp.OBJECTIVE_SIZE]]
             rew = rew_function(reached_obj, objective)
             rewards.append(rew)
         return rewards

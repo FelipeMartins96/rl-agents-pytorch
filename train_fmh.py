@@ -35,8 +35,8 @@ if __name__ == "__main__":
         DEVICE=device,
         ENV_NAME=args.env,
         WORKER_OBS_IDX=[int(idx) for idx in args.obs_idx.split(',')], 
-        OBJECTIVE_SIZE=len([int(idx) for idx in args.obs_idx.split(',')]),
-        N_ROLLOUT_PROCESSES=4,
+        OBJECTIVE_SIZE=2,
+        N_ROLLOUT_PROCESSES=2,
         LEARNING_RATE=0.001,
         EXP_GRAD_RATIO=100,
         BATCH_SIZE=1024,
@@ -46,6 +46,11 @@ if __name__ == "__main__":
         LOG_SIG_MAX=2,
         LOG_SIG_MIN=-20,
         EPSILON=1e-6,
+        NOISE_SIGMA_INITIAL=0.8,
+        NOISE_THETA=0.15,
+        NOISE_SIGMA_DECAY=0.99,
+        NOISE_SIGMA_MIN=0.15,
+        NOISE_SIGMA_GRAD_STEPS=3000,
         REPLAY_SIZE=1000000,
         REPLAY_INITIAL=10000,
         SAVE_FREQUENCY=100000,
@@ -65,6 +70,7 @@ if __name__ == "__main__":
     fmh.share_memory()
     exp_queue = mp.Queue(maxsize=hp.EXP_GRAD_RATIO)
     finish_event = mp.Event()
+    sigma_m = mp.Value('f', hp.NOISE_SIGMA_INITIAL)
     gif_req_m = mp.Value('i', -1)
     data_proc_list = []
     for _ in range(hp.N_ROLLOUT_PROCESSES):
@@ -74,6 +80,7 @@ if __name__ == "__main__":
                 fmh,
                 exp_queue,
                 finish_event,
+                sigma_m,
                 gif_req_m,
                 hp
             )
@@ -159,6 +166,11 @@ if __name__ == "__main__":
 
             if hp.GIF_FREQUENCY and n_grads % hp.GIF_FREQUENCY == 0:
                 gif_req_m.value = n_grads
+            
+            if hp.NOISE_SIGMA_DECAY and sigma_m.value > hp.NOISE_SIGMA_MIN \
+                and n_grads % hp.NOISE_SIGMA_GRAD_STEPS == 0:
+                with sigma_m.get_lock():
+                    sigma_m.value *= hp.NOISE_SIGMA_DECAY
 
     except KeyboardInterrupt:
         print("...Finishing...")
