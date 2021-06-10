@@ -65,7 +65,7 @@ def data_func(
                 manager_obs = s[0]
                 if trainer.update_index < 20000:
                     manager_action = [s[0][0], s[0][1]]*(hp.N_AGENTS - 1)
-                    manager_action = np.array(manager_action)
+                    manager_action = np.array(manager_action)*1.2
                 else:
                     manager_action = trainer.manager_action(manager_obs)
                     manager_action = noise_manager(manager_action)
@@ -134,7 +134,7 @@ class FMHHP(HyperParameters):
 
     def WORKER_REW_METHOD(self, x, y):
         rew = -np.linalg.norm(x-y)
-        if rew > -0.7:
+        if rew > -0.1:
             rew = 10
         return rew
 
@@ -196,7 +196,7 @@ class FMH:
         rewards = list()
         for next_obs, objective in zip(n_obs_env, objectives):
             reached_obj = next_obs[indexes[:self.hp.OBJECTIVE_SIZE]]
-            rew = rew_function(reached_obj*1.5, objective*1.5)
+            rew = rew_function(reached_obj*0.9, objective*0.9)
             rewards.append(rew)
         return rewards
 
@@ -210,7 +210,7 @@ class FMH:
 
     def manager_action(self, obs_manager, train=True):
         if self.action_idx % self.hp.PERSIST_COMM == 0 or not train:
-            action = self.manager.get_action(obs_manager)
+            action = self.manager.get_action(obs_manager)*1.2
             if train:
                 self.last_manager_action = action
                 self.action_idx += 1
