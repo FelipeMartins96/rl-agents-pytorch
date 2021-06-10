@@ -117,7 +117,7 @@ class FMHHP(HyperParameters):
     NOISE_SIGMA_GRAD_STEPS: float = None  # Decay action noise every _ grad steps
 
     def MANAGER_REW_METHOD(self, x):
-        return np.sum(x)
+        return np.mean(x)
 
     def WORKER_REW_METHOD(self, x, y):
         return -np.linalg.norm(x-y)
