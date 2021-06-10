@@ -148,7 +148,7 @@ if __name__ == "__main__":
             pi_loss, Q_loss1, Q_loss2, log_pi = loss_sac(alpha,
                                                          hp.GAMMA**hp.REWARD_STEPS,
                                                          batch, Q, pi,
-                                                         tgt_Q, device)
+                                                         tgt_Q)
 
             # train Entropy parameter
 
