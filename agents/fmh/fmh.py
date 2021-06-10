@@ -24,7 +24,13 @@ def data_func(
     hp
 ):
     env = gym.make(hp.ENV_NAME)
-    noise = OrnsteinUhlenbeckNoise(
+    noise_manager = OrnsteinUhlenbeckNoise(
+        sigma=sigma_m.value,
+        theta=hp.NOISE_THETA,
+        min_value=-1,
+        max_value=1
+    )
+    noise_workers = OrnsteinUhlenbeckNoise(
         sigma=sigma_m.value,
         theta=hp.NOISE_THETA,
         min_value=-1,
@@ -46,8 +52,10 @@ def data_func(
 
             done = False
             s = env.reset()
-            noise.reset()
-            noise.sigma = sigma_m.value
+            noise_manager.reset()
+            noise_manager.sigma = sigma_m.value
+            noise_workers.reset()
+            noise_workers.sigma = sigma_m.value
             info = {}
             ep_steps = 0
             ep_rw = [0]*hp.N_AGENTS
@@ -56,11 +64,12 @@ def data_func(
                 # Step the environment
                 manager_obs = s[0]
                 manager_action = trainer.manager_action(manager_obs)
-                manager_action = noise(manager_action)
+                manager_action = noise_manager(manager_action)
                 objectives = manager_action.reshape((-1, hp.OBJECTIVE_SIZE))
-                workers_obs = trainer.workers_obs(
-                    obs_env=s, objectives=objectives)
-                workers_actions = trainer.workers_action(workers_obs)
+                workers_obs = trainer.workers_obs(obs_env=s,
+                                                  objectives=objectives)
+                workers_actions = trainer.workers_action(workers_obs,
+                                                         noise_workers)
                 s_next, r, done, info = env.step(workers_actions)
                 ep_steps += 1
 
@@ -100,7 +109,7 @@ def data_func(
             info['fps'] = ep_steps / (time.perf_counter() - st_time)
             info['ep_steps'] = ep_steps
             info['ep_rw'] = ep_rw
-            info['noise'] = noise.sigma
+            info['noise'] = noise_manager.sigma
             queue_m.put(info)
 
 
@@ -206,8 +215,8 @@ class FMH:
             self.action_idx += 1
         return action
 
-    def workers_action(self, obs_workers):
-        return [worker.get_action(obs) for worker, obs in zip(self.workers, obs_workers)]
+    def workers_action(self, obs_workers, noise=lambda x: x):
+        return [noise(worker.get_action(obs)) for worker, obs in zip(self.workers, obs_workers)]
 
     def experience(self, experiences):
         i = 0
