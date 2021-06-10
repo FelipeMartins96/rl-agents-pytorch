@@ -129,8 +129,8 @@ class FMHHP(HyperParameters):
         return np.mean(x)
 
     def WORKER_REW_METHOD(self, x, y):
-        rew = -np.linalg.norm((x-y)*1.5)
-        if rew < -0.1:
+        rew = -np.linalg.norm(x-y)
+        if rew > -0.05:
             rew = 10
         return rew
 
@@ -192,7 +192,7 @@ class FMH:
         rewards = list()
         for next_obs, objective in zip(n_obs_env, objectives):
             reached_obj = next_obs[indexes[:self.hp.OBJECTIVE_SIZE]]
-            rew = rew_function(reached_obj, objective)
+            rew = rew_function(reached_obj*1.5, objective*1.5)
             rewards.append(rew)
         return rewards
 
