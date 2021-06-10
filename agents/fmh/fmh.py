@@ -59,11 +59,13 @@ def data_func(
             info = {}
             ep_steps = 0
             ep_rw = [0]*hp.N_AGENTS
+            ep_man = [0]
+            ep_wk = [0]*(hp.N_AGENTS-1)
             st_time = time.perf_counter()
             for i in range(hp.MAX_EPISODE_STEPS):
                 # Step the environment
                 manager_obs = s[0]
-                if trainer.update_index < 20000:
+                if trainer.update_index < 30000:
                     manager_action = [s[0][0], s[0][1]]*(hp.N_AGENTS - 1)
                     manager_action = np.array(manager_action)*1.2
                 else:
@@ -81,7 +83,7 @@ def data_func(
                 next_workers_obs = trainer.workers_obs(obs_env=s_next,
                                                        objectives=objectives)
 
-                manager_rewards = trainer.manager_reward(r)
+                manager_reward = trainer.manager_reward(r)
                 workers_rewards = trainer.workers_rewards(
                     n_obs_env=s_next, objectives=objectives
                 )
@@ -89,10 +91,12 @@ def data_func(
                 obs = [manager_obs] + workers_obs
                 actions = [manager_action] + workers_actions
                 next_obs = [next_manager_obs] + next_workers_obs
-                rewards = [manager_rewards] + workers_rewards
+                rewards = [manager_reward] + workers_rewards
 
+                ep_man += manager_reward
                 for i in range(hp.N_AGENTS-1):
                     ep_rw[i] += r[i]
+                    ep_wk[i] += workers_rewards[i]
 
                 exp = list()
                 for i in range(hp.N_AGENTS):
@@ -113,6 +117,8 @@ def data_func(
             info['fps'] = ep_steps / (time.perf_counter() - st_time)
             info['ep_steps'] = ep_steps
             info['ep_rw'] = np.mean(ep_rw)
+            info['rw_wk'] = np.mean(ep_wk)
+            info['rw_man'] = np.mean(ep_man)
             info['noise'] = noise_manager.sigma
             queue_m.put(info)
 
@@ -292,7 +298,7 @@ class FMHSAC(FMH):
         metrics = {}
         agents = [self.manager, self.worker]
         for i, agent in enumerate(agents):
-            if self.update_index < 20000 and i == 0:
+            if self.update_index < 30000 and i == 0:
                 continue
             if self.replay_buffers[i].size() < self.hp.BATCH_SIZE:
                 continue
@@ -317,7 +323,7 @@ class FMHDDPG(FMH):
         metrics = {}
         agents = [self.manager, self.worker]
         for i, agent in enumerate(agents):
-            if self.update_index < 20000 and i == 0:
+            if self.update_index < 30000 and i == 0:
                 continue
             if self.replay_buffers[i].size() < self.hp.BATCH_SIZE:
                 continue
