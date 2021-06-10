@@ -129,7 +129,10 @@ class FMHHP(HyperParameters):
         return np.mean(x)
 
     def WORKER_REW_METHOD(self, x, y):
-        return -np.linalg.norm(x-y)
+        rew = -np.linalg.norm((x-y)*1.5)
+        if rew < -0.1:
+            rew = 10
+        return rew
 
     def __post_init__(self):
         super().__post_init__()
@@ -228,6 +231,8 @@ class FMH:
                 last_state = exp.state
                 done = True
             if i == 0:
+                if self.update_index < 20000:
+                    continue
                 self.replay_buffers[0].add(
                     obs=exp.state,
                     next_obs=last_state,
