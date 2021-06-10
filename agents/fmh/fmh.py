@@ -87,7 +87,7 @@ def data_func(
                 next_obs = [next_manager_obs] + next_workers_obs
                 rewards = [manager_rewards] + workers_rewards
 
-                for i in range(hp.N_AGENTS):
+                for i in range(hp.N_AGENTS-1):
                     ep_rw[i] += r[i]
 
                 exp = list()
