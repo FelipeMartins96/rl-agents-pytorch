@@ -36,9 +36,9 @@ if __name__ == "__main__":
         ENV_NAME=args.env,
         WORKER_OBS_IDX=[int(idx) for idx in args.obs_idx.split(',')], 
         OBJECTIVE_SIZE=2,
-        N_ROLLOUT_PROCESSES=2,
+        N_ROLLOUT_PROCESSES=3,
         LEARNING_RATE=0.001,
-        EXP_GRAD_RATIO=100,
+        EXP_GRAD_RATIO=10,
         BATCH_SIZE=1024,
         GAMMA=0.95,
         REWARD_STEPS=3,
@@ -65,7 +65,7 @@ if __name__ == "__main__":
 
     # Method instace
     hp.N_AGENTS += 1
-    fmh = FMHSAC(methods=[SAC]*hp.N_AGENTS, hp=hp)
+    fmh = FMHSAC(methods=[SAC, SAC], hp=hp)
     # Playing
     fmh.share_memory()
     exp_queue = mp.Queue(maxsize=hp.EXP_GRAD_RATIO)
@@ -133,7 +133,7 @@ if __name__ == "__main__":
                     info = ep_infos[0]
                     info_metrics = {}
                     for key, value in info[f'ep_info/robot_{i}'].items():
-                        info_metrics[f'agent_{i}/{key}'] = value
+                        info_metrics[f'agent_{i+1}/{key}'] = value
                     metrics.update(info_metrics)
 
             n_grads += 1
@@ -152,13 +152,6 @@ if __name__ == "__main__":
                         metrics[key] = np.mean([info[key]
                                                for info in ep_infos])
 
-            # Check if there is a new gif
-            gifs = [int(file.split('.')[0]) for file in os.listdir(hp.GIF_PATH)]
-            gifs.sort()
-            if gifs and gifs[-1] > last_gif:
-                last_gif = gifs[-1]
-                path = os.path.join(hp.GIF_PATH, f"{last_gif:09d}.gif")
-                metrics.update({"gif": wandb.Video(path, fps=10, format="gif")})
             # Log metrics
             wandb.log(metrics)
             if hp.SAVE_FREQUENCY and n_grads % hp.SAVE_FREQUENCY == 0:

@@ -88,7 +88,7 @@ def data_func(
                 rewards = [manager_rewards] + workers_rewards
 
                 for i in range(hp.N_AGENTS):
-                    ep_rw[i] += rewards[i]
+                    ep_rw[i] += r[i]
 
                 exp = list()
                 for i in range(hp.N_AGENTS):
@@ -108,7 +108,7 @@ def data_func(
 
             info['fps'] = ep_steps / (time.perf_counter() - st_time)
             info['ep_steps'] = ep_steps
-            info['ep_rw'] = ep_rw
+            info['ep_rw'] = np.mean(ep_rw)
             info['noise'] = noise_manager.sigma
             queue_m.put(info)
 
@@ -157,17 +157,13 @@ class FMH:
         manager_hp.N_ACTS = (manager_hp.N_AGENTS-1)*manager_hp.OBJECTIVE_SIZE
         manager_hp.action_space.shape = (manager_hp.N_ACTS,)
         self.manager = methods[0](manager_hp)
-        self.manager.gamma = 0.75
-        manager_hp.GAMMA = 0.75
         hps.append(manager_hp)
 
-        self.workers = []
-        for method in methods[1:]:
-            worker_hp = copy.deepcopy(hp)
-            worker_hp.N_OBS = hp.WORKER_N_OBS
-            worker_hp.observation_space.shape = (worker_hp.N_OBS, )
-            hps.append(worker_hp)
-            self.workers.append(method(worker_hp))
+        worker_hp = copy.deepcopy(hp)
+        worker_hp.N_OBS = hp.WORKER_N_OBS
+        worker_hp.observation_space.shape = (worker_hp.N_OBS, )
+        self.worker = methods[1](worker_hp)
+        hps.append(worker_hp)
 
         self.hp = hp
         self.replay_buffers = []
@@ -178,10 +174,11 @@ class FMH:
                                   device=hp.DEVICE
                                   )
             self.replay_buffers.append(buffer)
+        self.update_index = 0
 
     def share_memory(self):
         self.manager.share_memory()
-        [worker.share_memory() for worker in self.workers]
+        self.worker.share_memory()
 
     def manager_reward(self, reward):
         return self.hp.MANAGER_REW_METHOD(reward)
@@ -205,7 +202,11 @@ class FMH:
         return observations
 
     def manager_action(self, obs_manager, train=True):
-        if self.action_idx % self.hp.PERSIST_COMM == 0 or not train:
+        if self.update_index < 200 and train:
+            persist_comm = 30
+        else:
+            persist_comm = self.hp.PERSIST_COMM
+        if self.action_idx % persist_comm == 0 or not train:
             action = self.manager.get_action(obs_manager)
             if train:
                 self.last_manager_action = action
@@ -216,25 +217,32 @@ class FMH:
         return action
 
     def workers_action(self, obs_workers, noise=lambda x: x):
-        return [noise(worker.get_action(obs)) for worker, obs in zip(self.workers, obs_workers)]
+        return noise(self.worker.get_action(obs_workers)).tolist()
 
     def experience(self, experiences):
-        i = 0
-        for buffer, exp in zip(self.replay_buffers, experiences):
+        for i, exp in enumerate(experiences):
             done = False
             if exp.last_state is not None:
                 last_state = exp.last_state
             else:
                 last_state = exp.state
                 done = True
-            buffer.add(
-                obs=exp.state,
-                next_obs=last_state,
-                action=exp.action,
-                reward=exp.reward,
-                done=done
-            )
-            i += 1
+            if i == 0:
+                self.replay_buffers[0].add(
+                    obs=exp.state,
+                    next_obs=last_state,
+                    action=exp.action,
+                    reward=exp.reward,
+                    done=done
+                )
+            else:
+                self.replay_buffers[1].add(
+                    obs=exp.state,
+                    next_obs=last_state,
+                    action=exp.action,
+                    reward=exp.reward,
+                    done=done
+                )
 
     def save_agent(self, agent, name):
         torch.save(agent.pi.state_dict(),
@@ -259,27 +267,30 @@ class FMH:
         agent.tgt_Q = TargetCritic(agent.Q)
 
     def save(self):
-        agents = [self.manager] + self.workers
+        agents = [self.manager, self.worker]
         for i, agent in enumerate(agents):
             self.save_agent(agent=agent, name=f'agent_{i}')
 
     def load(self, load_path):
-        agents = [self.manager] + self.workers
+        agents = [self.manager, self.worker]
         for i, agent in enumerate(agents):
             self.load_agent(agent=agent,
                             load_path=load_path,
                             name=f'agent_{i}')
 
     def update(self):
-        raise NotImplementedError
+        self.update_index += 1
 
 
 class FMHSAC(FMH):
 
     def update(self):
+        super().update()
         metrics = {}
-        agents = [self.manager] + self.workers
+        agents = [self.manager, self.worker]
         for i, agent in enumerate(agents):
+            if self.update_index < 200 and i == 0:
+                pass
             batch = self.replay_buffers[i].sample(self.hp.BATCH_SIZE)
             loss = agent.update(batch)
             if loss:
@@ -297,9 +308,12 @@ class FMHSAC(FMH):
 class FMHDDPG(FMH):
 
     def update(self):
+        super().update()
         metrics = {}
-        agents = [self.manager] + self.workers
+        agents = [self.manager, self.worker]
         for i, agent in enumerate(agents):
+            if self.update_index < 200 and i == 0:
+                pass
             batch = self.replay_buffers[i].sample(self.hp.BATCH_SIZE)
             loss = agent.update(batch)
             if loss:
