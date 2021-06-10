@@ -63,8 +63,12 @@ def data_func(
             for i in range(hp.MAX_EPISODE_STEPS):
                 # Step the environment
                 manager_obs = s[0]
-                manager_action = trainer.manager_action(manager_obs)
-                manager_action = noise_manager(manager_action)
+                if trainer.update_index < 20000:
+                    manager_action = [s[0][0], s[0][1]]*(hp.N_AGENTS - 1)
+                    manager_action = np.array(manager_action)
+                else:
+                    manager_action = trainer.manager_action(manager_obs)
+                    manager_action = noise_manager(manager_action)
                 objectives = manager_action.reshape((-1, hp.OBJECTIVE_SIZE))
                 workers_obs = trainer.workers_obs(obs_env=s,
                                                   objectives=objectives)
@@ -205,15 +209,9 @@ class FMH:
         return observations
 
     def manager_action(self, obs_manager, train=True):
-        if self.update_index < 20000 and train:
-            persist_comm = 30
-        else:
-            persist_comm = self.hp.PERSIST_COMM
-        if self.action_idx % persist_comm == 0 or not train:
+        if self.action_idx % self.hp.PERSIST_COMM == 0 or not train:
             action = self.manager.get_action(obs_manager)
             if train:
-                if self.update_index < 20000:
-                    action = action/4
                 self.last_manager_action = action
                 self.action_idx += 1
         else:
@@ -233,8 +231,6 @@ class FMH:
                 last_state = exp.state
                 done = True
             if i == 0:
-                if self.update_index < 20000:
-                    continue
                 self.replay_buffers[0].add(
                     obs=exp.state,
                     next_obs=last_state,
