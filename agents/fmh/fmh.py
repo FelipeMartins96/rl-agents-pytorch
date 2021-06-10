@@ -134,7 +134,7 @@ class FMHHP(HyperParameters):
 
     def WORKER_REW_METHOD(self, x, y):
         rew = -np.linalg.norm(x-y)
-        if rew > -0.05:
+        if rew > -0.07:
             rew = 10
         return rew
 
