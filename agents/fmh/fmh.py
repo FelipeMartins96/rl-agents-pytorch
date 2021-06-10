@@ -202,7 +202,7 @@ class FMH:
         return observations
 
     def manager_action(self, obs_manager, train=True):
-        if self.update_index < 200 and train:
+        if self.update_index < 20000 and train:
             persist_comm = 30
         else:
             persist_comm = self.hp.PERSIST_COMM
@@ -289,7 +289,7 @@ class FMHSAC(FMH):
         metrics = {}
         agents = [self.manager, self.worker]
         for i, agent in enumerate(agents):
-            if self.update_index < 200 and i == 0:
+            if self.update_index < 20000 and i == 0:
                 continue
             batch = self.replay_buffers[i].sample(self.hp.BATCH_SIZE)
             loss = agent.update(batch)
@@ -312,7 +312,7 @@ class FMHDDPG(FMH):
         metrics = {}
         agents = [self.manager, self.worker]
         for i, agent in enumerate(agents):
-            if self.update_index < 200 and i == 0:
+            if self.update_index < 20000 and i == 0:
                 continue
             batch = self.replay_buffers[i].sample(self.hp.BATCH_SIZE)
             loss = agent.update(batch)
