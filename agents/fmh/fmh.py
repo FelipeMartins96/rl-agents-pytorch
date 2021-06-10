@@ -296,6 +296,8 @@ class FMHSAC(FMH):
         for i, agent in enumerate(agents):
             if self.update_index < 20000 and i == 0:
                 continue
+            if self.replay_buffers[i].size() < self.hp.BATCH_SIZE:
+                continue
             batch = self.replay_buffers[i].sample(self.hp.BATCH_SIZE)
             loss = agent.update(batch)
             if loss:
@@ -318,6 +320,8 @@ class FMHDDPG(FMH):
         agents = [self.manager, self.worker]
         for i, agent in enumerate(agents):
             if self.update_index < 20000 and i == 0:
+                continue
+            if self.replay_buffers[i].size() < self.hp.BATCH_SIZE:
                 continue
             batch = self.replay_buffers[i].sample(self.hp.BATCH_SIZE)
             loss = agent.update(batch)
