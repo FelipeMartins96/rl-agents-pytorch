@@ -186,8 +186,6 @@ class FMH:
         rewards = list()
         for next_obs, objective in zip(n_obs_env, objectives):
             reached_obj = next_obs[:self.hp.OBJECTIVE_SIZE]
-            if self.update_index < 30000:
-                objective = next_obs[-self.hp.OBJECTIVE_SIZE:]
             rew = rew_function(reached_obj*0.9, objective*0.9)
             rewards.append(rew)
         return rewards
@@ -195,11 +193,7 @@ class FMH:
     def workers_obs(self, obs_env, objectives):
         observations = list()
         for obs, objective in zip(obs_env, objectives):
-            if self.update_index > 30000:
-                worker_obs = np.concatenate((obs[:-self.hp.OBJECTIVE_SIZE],
-                                             objective))
-            else:
-                worker_obs = obs
+            worker_obs = np.concatenate((obs, objective))
             observations.append(worker_obs)
         return observations
 
@@ -226,8 +220,6 @@ class FMH:
                 last_state = exp.state
                 done = True
             if i == 0:
-                if self.update_index < 30000:
-                    continue
                 self.replay_buffers[0].add(
                     obs=exp.state,
                     next_obs=last_state,
@@ -283,8 +275,6 @@ class FMH:
         metrics = {}
         agents = [self.manager, self.worker]
         for i, agent in enumerate(agents):
-            if self.update_index < 30000 and i == 0:
-                continue
             if self.replay_buffers[i].size() < self.hp.BATCH_SIZE:
                 continue
             batch = self.replay_buffers[i].sample(self.hp.BATCH_SIZE)
