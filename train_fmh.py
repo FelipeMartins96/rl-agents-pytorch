@@ -11,7 +11,7 @@ import torch.multiprocessing as mp
 
 import wandb
 from agents.ddpg.ddpg import DDPG
-from agents.fmh.fmh import FMH, FMHHP, data_func
+from agents.fmh.fmh import FMH, FMHHP, FMHPT, data_func
 from agents.sac.sac import SAC
 from agents.utils import gif
 
@@ -38,7 +38,7 @@ if __name__ == "__main__":
         LEARNING_RATE=0.001,
         EXP_GRAD_RATIO=10,
         BATCH_SIZE=1024,
-        GAMMA=0.95,
+        GAMMA=0.75,
         REWARD_STEPS=3,
         ALPHA=0.015,
         LOG_SIG_MAX=2,
@@ -50,20 +50,22 @@ if __name__ == "__main__":
         NOISE_SIGMA_MIN=0.15,
         NOISE_SIGMA_GRAD_STEPS=3000,
         REPLAY_SIZE=1000000,
-        REPLAY_INITIAL=100000,
+        REPLAY_INITIAL=1024,
         SAVE_FREQUENCY=100000,
         GIF_FREQUENCY=10000,
         TOTAL_GRAD_STEPS=2000000,
         MULTI_AGENT=True,
     )
-    wandb.init(project='RoboCIn-RL', name=hp.EXP_NAME, entity='robocin', config=hp.to_dict())
+    wandb.init(project='RoboCIn-RL', name=hp.EXP_NAME,
+               entity='robocin', config=hp.to_dict())
     current_time = datetime.datetime.now().strftime('%b-%d_%H-%M-%S')
     tb_path = os.path.join('runs', current_time + '_'
                            + hp.ENV_NAME + '_' + hp.EXP_NAME)
 
     # Method instace
     hp.N_AGENTS += 1
-    fmh = FMH(methods=[DDPG, DDPG], hp=hp)
+    fmh = FMHPT(methods=[DDPG, DDPG], hp=hp,
+                path_worker='agents/fmh/worker_trained/worker_7_2.pth')
     # Playing
     fmh.share_memory()
     exp_queue = mp.Queue(maxsize=hp.EXP_GRAD_RATIO)
@@ -120,7 +122,7 @@ if __name__ == "__main__":
             sample_time = time.perf_counter()
 
             # Only start training after buffer is larger than initial value
-            if fmh.replay_buffers[1].size() < hp.REPLAY_INITIAL:
+            if fmh.replay_buffers[0].size() < hp.REPLAY_INITIAL:
                 continue
 
             # Update networks and log metrics
@@ -157,9 +159,9 @@ if __name__ == "__main__":
 
             if hp.GIF_FREQUENCY and n_grads % hp.GIF_FREQUENCY == 0:
                 gif_req_m.value = n_grads
-            
+
             if hp.NOISE_SIGMA_DECAY and sigma_m.value > hp.NOISE_SIGMA_MIN \
-                and n_grads % hp.NOISE_SIGMA_GRAD_STEPS == 0:
+                    and n_grads % hp.NOISE_SIGMA_GRAD_STEPS == 0:
                 with sigma_m.get_lock():
                     sigma_m.value *= hp.NOISE_SIGMA_DECAY
 

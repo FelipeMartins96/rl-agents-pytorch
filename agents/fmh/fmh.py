@@ -10,13 +10,13 @@ import torch
 from agents.ddpg.networks import TargetActor, TargetCritic
 from agents.sac.sac import SAC
 from agents.utils.buffer import ReplayBuffer
-from agents.utils.experience import ExperienceFirstLast
+from agents.utils.experience import ExperienceFirstLast, NStepTracer
 from agents.utils.experiment import HyperParameters
 from agents.utils.gif import generate_gif
 from agents.utils.noise import OrnsteinUhlenbeckNoise
 
 
-def data_func(
+def data_func_with_worker(
     trainer,
     queue_m,
     finish_event_m,
@@ -76,7 +76,7 @@ def data_func(
                 s_next, r, done, info = env.step(workers_actions)
                 ep_steps += 1
 
-                next_manager_obs = s[0]
+                next_manager_obs = s_next[0]
                 next_workers_obs = trainer.workers_obs(obs_env=s_next[1:],
                                                        objectives=objectives)
 
@@ -114,6 +114,76 @@ def data_func(
             info['rw_wk'] = np.mean(ep_wk)
             info['rw_man'] = ep_rw
             info['noise'] = noise_manager.sigma
+            queue_m.put(info)
+
+
+def data_func(
+    trainer,
+    queue_m,
+    finish_event_m,
+    sigma_m,
+    gif_req_m,
+    hp
+):
+    env = gym.make(hp.ENV_NAME)
+    tracer = NStepTracer(n=hp.REWARD_STEPS, gamma=hp.GAMMA)
+    noise = OrnsteinUhlenbeckNoise(
+        sigma=sigma_m.value,
+        theta=hp.NOISE_THETA,
+        min_value=-1,
+        max_value=1
+    )
+
+    with torch.no_grad():
+        while not finish_event_m.is_set():
+            # Check for generate gif request
+            gif_idx = -1
+            with gif_req_m.get_lock():
+                if gif_req_m.value != -1:
+                    gif_idx = gif_req_m.value
+                    gif_req_m.value = -1
+            if gif_idx != -1:
+                path = os.path.join(hp.GIF_PATH, f"{gif_idx:09d}.gif")
+                generate_gif(env=env, filepath=path,
+                             pi=copy.deepcopy(trainer), hp=hp)
+
+            done = False
+            s = env.reset()
+            noise.reset()
+            tracer.reset()
+            noise.sigma = sigma_m.value
+
+            info = {}
+            ep_steps = 0
+            ep_rw = 0
+            st_time = time.perf_counter()
+            for i in range(hp.MAX_EPISODE_STEPS):
+                # Step the environment
+                manager_obs = s[0]
+                manager_action = trainer.manager_action(manager_obs)
+                manager_action = noise(manager_action)
+                objectives = manager_action.reshape((-1, hp.OBJECTIVE_SIZE))
+                workers_obs = trainer.workers_obs(obs_env=s[1:],
+                                                  objectives=objectives)
+                workers_actions = trainer.workers_action(workers_obs)
+                s_next, r, done, info = env.step(workers_actions)
+                ep_steps += 1
+                ep_rw += r
+
+                tracer.add(manager_obs, manager_action, r, done)
+                while tracer:
+                    queue_m.put(tracer.pop())
+
+                if done:
+                    break
+
+                # Set state for next step
+                s = s_next
+
+            info['fps'] = ep_steps / (time.perf_counter() - st_time)
+            info['ep_steps'] = ep_steps
+            info['rw_man'] = ep_rw
+            info['noise'] = noise.sigma
             queue_m.put(info)
 
 
@@ -274,6 +344,62 @@ class FMH:
         self.update_index += 1
         metrics = {}
         agents = [self.manager, self.worker]
+        for i, agent in enumerate(agents):
+            if self.replay_buffers[i].size() < self.hp.BATCH_SIZE:
+                continue
+            batch = self.replay_buffers[i].sample(self.hp.BATCH_SIZE)
+            loss = agent.update(batch)
+            if loss:
+                if isinstance(agent, SAC):
+                    metrics.update({
+                        f"agent_{i}/p_loss": loss[0],
+                        f"agent_{i}/q1_loss": loss[1],
+                        f"agent_{i}/q2_loss": loss[2],
+                        f"agent_{i}/loss_alpha": loss[3],
+                        f"agent_{i}/alpha": loss[4],
+                        f"agent_{i}/mean(rew)": loss[5]
+                    })
+                else:
+                    metrics.update({
+                        f"agent_{i}/p_loss": loss[0],
+                        f"agent_{i}/q_loss": loss[1],
+                        f"agent_{i}/mean(rew)": loss[2]
+                    })
+        return metrics
+
+
+class FMHPT(FMH):
+
+    def __init__(self, methods: List, hp: FMHHP, path_worker: str) -> None:
+        super().__init__(methods=methods, hp=hp)
+        self.load_worker(path_worker)
+
+    def load_worker(self, path):
+        save_dict = torch.load(path)
+        Q_dict = save_dict['Q_state_dict']
+        pi_dict = save_dict['pi_state_dict']
+        self.worker.pi.load_state_dict(pi_dict)
+        self.worker.Q.load_state_dict(Q_dict)
+
+    def experience(self, exp):
+        done = False
+        if exp.last_state is not None:
+            last_state = exp.last_state
+        else:
+            last_state = exp.state
+            done = True
+        self.replay_buffers[0].add(
+            obs=exp.state,
+            next_obs=last_state,
+            action=exp.action,
+            reward=exp.reward,
+            done=done
+        )
+
+    def update(self):
+        self.update_index += 1
+        metrics = {}
+        agents = [self.manager]
         for i, agent in enumerate(agents):
             if self.replay_buffers[i].size() < self.hp.BATCH_SIZE:
                 continue
