@@ -27,7 +27,7 @@ def generate_gif(
     """
 
     # collect frames
-    MA_METHODS = ['maddpg_async', 'fmhsac_async']
+    MA_METHODS = ['maddpg_async', 'fmh_async']
     frames = []
     s = env.reset()
     for t in range(max_episode_steps):
