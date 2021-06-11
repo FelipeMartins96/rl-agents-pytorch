@@ -45,7 +45,7 @@ def generate_gif(
             manager_obs = s[0]
             manager_action = pi.manager_action(manager_obs)
             objectives = manager_action.reshape((-1, hp.OBJECTIVE_SIZE))
-            workers_obs = pi.workers_obs(obs_env=s, objectives=objectives)
+            workers_obs = pi.workers_obs(obs_env=s[1:], objectives=objectives)
             workers_actions = pi.workers_action(workers_obs)
             s_next, r, done, info = env.step(workers_actions)
 
