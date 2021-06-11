@@ -226,6 +226,8 @@ class FMH:
                 last_state = exp.state
                 done = True
             if i == 0:
+                if self.update_index < 30000:
+                    continue
                 self.replay_buffers[0].add(
                     obs=exp.state,
                     next_obs=last_state,
