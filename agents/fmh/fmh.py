@@ -59,21 +59,16 @@ def data_func(
             noise_workers.sigma = sigma_m.value
             info = {}
             ep_steps = 0
-            ep_rw = [0]*hp.N_AGENTS
-            ep_man = [0]
+            ep_rw = 0
             ep_wk = [0]*(hp.N_AGENTS-1)
             st_time = time.perf_counter()
             for i in range(hp.MAX_EPISODE_STEPS):
                 # Step the environment
                 manager_obs = s[0]
-                if trainer.update_index < 30000:
-                    manager_action = [s[0][0], s[0][1]]*(hp.N_AGENTS - 1)
-                    manager_action = np.array(manager_action)*1.2
-                else:
-                    manager_action = trainer.manager_action(manager_obs)
-                    manager_action = noise_manager(manager_action)
+                manager_action = trainer.manager_action(manager_obs)
+                manager_action = noise_manager(manager_action)
                 objectives = manager_action.reshape((-1, hp.OBJECTIVE_SIZE))
-                workers_obs = trainer.workers_obs(obs_env=s,
+                workers_obs = trainer.workers_obs(obs_env=s[1:],
                                                   objectives=objectives)
                 workers_actions = trainer.workers_action(workers_obs,
                                                          noise_workers)
@@ -81,22 +76,20 @@ def data_func(
                 ep_steps += 1
 
                 next_manager_obs = s[0]
-                next_workers_obs = trainer.workers_obs(obs_env=s_next,
+                next_workers_obs = trainer.workers_obs(obs_env=s_next[1:],
                                                        objectives=objectives)
 
-                manager_reward = trainer.manager_reward(r)
                 workers_rewards = trainer.workers_rewards(
-                    n_obs_env=s_next, objectives=objectives
+                    n_obs_env=s_next[1:], objectives=objectives
                 )
 
                 obs = [manager_obs] + workers_obs
                 actions = [manager_action] + workers_actions
                 next_obs = [next_manager_obs] + next_workers_obs
-                rewards = [manager_reward] + workers_rewards
+                rewards = [r] + workers_rewards
 
-                ep_man += manager_reward
+                ep_rw += r
                 for i in range(hp.N_AGENTS-1):
-                    ep_rw[i] += r[i]
                     ep_wk[i] += workers_rewards[i]
 
                 exp = list()
@@ -117,9 +110,8 @@ def data_func(
 
             info['fps'] = ep_steps / (time.perf_counter() - st_time)
             info['ep_steps'] = ep_steps
-            info['ep_rw'] = np.mean(ep_rw)
             info['rw_wk'] = np.mean(ep_wk)
-            info['rw_man'] = np.mean(ep_man)
+            info['rw_man'] = ep_rw
             info['noise'] = noise_manager.sigma
             queue_m.put(info)
 
@@ -128,7 +120,7 @@ def data_func(
 class FMHHP(HyperParameters):
     AGENT: str = "fmh_async"
     PERSIST_COMM: int = 8
-    WORKER_OBS_IDX: list = None
+    WORKER_N_OBS: int = 7
     OBJECTIVE_SIZE: int = None
     NOISE_SIGMA_INITIAL: float = None  # Initial action noise sigma
     NOISE_THETA: float = None
@@ -148,10 +140,6 @@ class FMHHP(HyperParameters):
         if rew > -0.1:
             rew = 10
         return rew
-
-    def __post_init__(self):
-        super().__post_init__()
-        self.WORKER_N_OBS = len(self.WORKER_OBS_IDX) + self.OBJECTIVE_SIZE
 
 
 class FMH:
@@ -193,26 +181,30 @@ class FMH:
         return self.hp.MANAGER_REW_METHOD(reward)
 
     def workers_rewards(self, n_obs_env, objectives):
-        indexes = self.hp.WORKER_OBS_IDX
         rew_function = self.hp.WORKER_REW_METHOD
         rewards = list()
         for next_obs, objective in zip(n_obs_env, objectives):
-            reached_obj = next_obs[indexes[:self.hp.OBJECTIVE_SIZE]]
-            rew = rew_function(reached_obj*0.9, objective*0.9)
+            reached_obj = next_obs[:self.hp.OBJECTIVE_SIZE]
+            if self.update_index < 30000:
+                objective = next_obs[-self.hp.OBJECTIVE_SIZE:]
+            rew = rew_function(reached_obj*1.08, objective*1.08)
             rewards.append(rew)
         return rewards
 
     def workers_obs(self, obs_env, objectives):
-        indexes = self.hp.WORKER_OBS_IDX
         observations = list()
-        for next_obs, objective in zip(obs_env, objectives):
-            worker_obs = np.concatenate((next_obs[indexes], objective))
+        for obs, objective in zip(obs_env, objectives):
+            if self.update_index > 30000:
+                worker_obs = np.concatenate((obs[:-self.hp.OBJECTIVE_SIZE],
+                                             objective))
+            else:
+                worker_obs = obs
             observations.append(worker_obs)
         return observations
 
     def manager_action(self, obs_manager, train=True):
         if self.action_idx % self.hp.PERSIST_COMM == 0 or not train:
-            action = self.manager.get_action(obs_manager)*1.2
+            action = self.manager.get_action(obs_manager)
             if train:
                 self.last_manager_action = action
                 self.action_idx += 1

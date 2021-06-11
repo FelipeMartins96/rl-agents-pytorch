@@ -25,8 +25,6 @@ if __name__ == "__main__":
                         help="Name of the run")
     parser.add_argument("-e", "--env", required=True,
                         help="Name of the gym environment")
-    parser.add_argument("-o", "--obs_idx", required=True,
-                        help="Name of the gym environment")
     args = parser.parse_args()
     device = "cuda" if args.cuda else "cpu"
 
@@ -35,7 +33,6 @@ if __name__ == "__main__":
         EXP_NAME=args.name,
         DEVICE=device,
         ENV_NAME=args.env,
-        WORKER_OBS_IDX=[int(idx) for idx in args.obs_idx.split(',')], 
         OBJECTIVE_SIZE=2,
         N_ROLLOUT_PROCESSES=3,
         LEARNING_RATE=0.001,
@@ -66,7 +63,7 @@ if __name__ == "__main__":
 
     # Method instace
     hp.N_AGENTS += 1
-    fmh = FMH(methods=[DDPG, SAC], hp=hp)
+    fmh = FMH(methods=[DDPG, DDPG], hp=hp)
     # Playing
     fmh.share_memory()
     exp_queue = mp.Queue(maxsize=hp.EXP_GRAD_RATIO)
@@ -133,7 +130,7 @@ if __name__ == "__main__":
                 if ep_infos:
                     info = ep_infos[0]
                     info_metrics = {}
-                    for key, value in info[f'ep_info/robot_{i}'].items():
+                    for key, value in info[f'ep_info/robot_{i+1}'].items():
                         info_metrics[f'agent_{i+1}/{key}'] = value
                     metrics.update(info_metrics)
 
