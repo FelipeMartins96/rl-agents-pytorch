@@ -68,6 +68,7 @@ def data_func(
                 manager_action = trainer.manager_action(manager_obs)
                 manager_action = noise_manager(manager_action)
                 objectives = manager_action.reshape((-1, hp.OBJECTIVE_SIZE))
+                objectives = objectives*env.NORM_BOUNDS
                 workers_obs = trainer.workers_obs(obs_env=s[1:],
                                                   objectives=objectives)
                 workers_actions = trainer.workers_action(workers_obs,
@@ -187,7 +188,7 @@ class FMH:
             reached_obj = next_obs[:self.hp.OBJECTIVE_SIZE]
             if self.update_index < 30000:
                 objective = next_obs[-self.hp.OBJECTIVE_SIZE:]
-            rew = rew_function(reached_obj*1.08, objective*1.08)
+            rew = rew_function(reached_obj*0.9, objective*0.9)
             rewards.append(rew)
         return rewards
 
