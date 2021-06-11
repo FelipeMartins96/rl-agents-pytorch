@@ -1,4 +1,3 @@
-from agents.utils.noise import OrnsteinUhlenbeckNoise
 import copy
 import os
 import time
@@ -9,10 +8,12 @@ import gym
 import numpy as np
 import torch
 from agents.ddpg.networks import TargetActor, TargetCritic
+from agents.sac.sac import SAC
 from agents.utils.buffer import ReplayBuffer
 from agents.utils.experience import ExperienceFirstLast
 from agents.utils.experiment import HyperParameters
 from agents.utils.gif import generate_gif
+from agents.utils.noise import OrnsteinUhlenbeckNoise
 
 
 def data_func(
@@ -134,6 +135,10 @@ class FMHHP(HyperParameters):
     NOISE_SIGMA_DECAY: float = None  # Action noise sigma decay
     NOISE_SIGMA_MIN: float = None
     NOISE_SIGMA_GRAD_STEPS: float = None  # Decay action noise every _ grad steps
+    ALPHA: float = None
+    LOG_SIG_MAX: int = None
+    LOG_SIG_MIN: int = None
+    EPSILON: float = None
 
     def MANAGER_REW_METHOD(self, x):
         return np.mean(x)
@@ -147,15 +152,6 @@ class FMHHP(HyperParameters):
     def __post_init__(self):
         super().__post_init__()
         self.WORKER_N_OBS = len(self.WORKER_OBS_IDX) + self.OBJECTIVE_SIZE
-
-
-@dataclass
-class FMHSACHP(FMHHP):
-    AGENT: str = "fmhsac_async"
-    ALPHA: float = None
-    LOG_SIG_MAX: int = None
-    LOG_SIG_MIN: int = None
-    EPSILON: float = None
 
 
 class FMH:
@@ -289,12 +285,6 @@ class FMH:
 
     def update(self):
         self.update_index += 1
-
-
-class FMHSAC(FMH):
-
-    def update(self):
-        super().update()
         metrics = {}
         agents = [self.manager, self.worker]
         for i, agent in enumerate(agents):
@@ -305,34 +295,19 @@ class FMHSAC(FMH):
             batch = self.replay_buffers[i].sample(self.hp.BATCH_SIZE)
             loss = agent.update(batch)
             if loss:
-                metrics.update({
-                    f"agent_{i}/p_loss": loss[0],
-                    f"agent_{i}/q1_loss": loss[1],
-                    f"agent_{i}/q2_loss": loss[2],
-                    f"agent_{i}/loss_alpha": loss[3],
-                    f"agent_{i}/alpha": loss[4],
-                    f"agent_{i}/mean(rew)": loss[5]
-                })
-        return metrics
-
-
-class FMHDDPG(FMH):
-
-    def update(self):
-        super().update()
-        metrics = {}
-        agents = [self.manager, self.worker]
-        for i, agent in enumerate(agents):
-            if self.update_index < 30000 and i == 0:
-                continue
-            if self.replay_buffers[i].size() < self.hp.BATCH_SIZE:
-                continue
-            batch = self.replay_buffers[i].sample(self.hp.BATCH_SIZE)
-            loss = agent.update(batch)
-            if loss:
-                metrics.update({
-                    f"agent_{i}/p_loss": loss[0],
-                    f"agent_{i}/q_loss": loss[1],
-                    f"agent_{i}/mean(rew)": loss[2]
-                })
+                if isinstance(agent, SAC):
+                    metrics.update({
+                        f"agent_{i}/p_loss": loss[0],
+                        f"agent_{i}/q1_loss": loss[1],
+                        f"agent_{i}/q2_loss": loss[2],
+                        f"agent_{i}/loss_alpha": loss[3],
+                        f"agent_{i}/alpha": loss[4],
+                        f"agent_{i}/mean(rew)": loss[5]
+                    })
+                else:
+                    metrics.update({
+                        f"agent_{i}/p_loss": loss[0],
+                        f"agent_{i}/q_loss": loss[1],
+                        f"agent_{i}/mean(rew)": loss[2]
+                    })
         return metrics

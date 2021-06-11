@@ -74,9 +74,7 @@ def data_func(
             st_time = time.perf_counter()
             for i in range(hp.MAX_EPISODE_STEPS):
                 # Step the environment
-                s_v = torch.Tensor(s).to(device)
-                a_v = pi(s_v)
-                a = a_v.cpu().numpy()
+                a = pi.get_action(s)
                 a = noise(a)
                 s_next, r, done, info = env.step(a)
                 ep_steps += 1
@@ -162,16 +160,16 @@ class DDPG:
     def update(self, batch):
         pi_loss, Q_loss = self.loss(batch)
 
-        # train critic
-        Q_loss = Q_loss
-        self.Q_opt.zero_grad()
-        Q_loss.backward()
-        self.Q_opt.step()
 
         # train actor - Maximize Q value received over every S
         self.pi_opt.zero_grad()
         pi_loss.backward()
         self.pi_opt.step()
+
+        # train critic
+        self.Q_opt.zero_grad()
+        Q_loss.backward()
+        self.Q_opt.step()
 
         pi_loss = pi_loss.cpu().detach().numpy()
         Q_loss = Q_loss.cpu().detach().numpy()

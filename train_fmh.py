@@ -10,7 +10,8 @@ import rsoccer_gym
 import torch.multiprocessing as mp
 
 import wandb
-from agents.fmh import FMHSAC, FMHDDPG, FMHSACHP, data_func
+from agents.ddpg.ddpg import DDPG
+from agents.fmh.fmh import FMH, FMHHP, data_func
 from agents.sac.sac import SAC
 from agents.utils import gif
 
@@ -30,7 +31,7 @@ if __name__ == "__main__":
     device = "cuda" if args.cuda else "cpu"
 
     # Input Experiment Hyperparameters
-    hp = FMHSACHP(
+    hp = FMHHP(
         EXP_NAME=args.name,
         DEVICE=device,
         ENV_NAME=args.env,
@@ -65,7 +66,7 @@ if __name__ == "__main__":
 
     # Method instace
     hp.N_AGENTS += 1
-    fmh = FMHSAC(methods=[SAC, SAC], hp=hp)
+    fmh = FMH(methods=[DDPG, SAC], hp=hp)
     # Playing
     fmh.share_memory()
     exp_queue = mp.Queue(maxsize=hp.EXP_GRAD_RATIO)

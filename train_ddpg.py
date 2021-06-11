@@ -13,15 +13,11 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 import wandb
-from agents.ddpg import (DDPGHP, DDPGActor, DDPGCritic, TargetActor,
-                         TargetCritic, data_func)
+from agents.ddpg import (DDPGHP, data_func, DDPG)
 from agents.utils import ReplayBuffer, save_checkpoint, unpack_batch, ExperienceFirstLast
 import pyvirtualdisplay
 
 if __name__ == "__main__":
-    # Creates a virtual display for OpenAI gym
-    pyvirtualdisplay.Display(visible=0, size=(1400, 900)).start()
-
     mp.set_start_method('spawn')
     os.environ['OMP_NUM_THREADS'] = "1"
     parser = argparse.ArgumentParser()
@@ -39,8 +35,8 @@ if __name__ == "__main__":
         EXP_NAME=args.name,
         DEVICE=device,
         ENV_NAME=args.env,
-        N_ROLLOUT_PROCESSES=2,
-        LEARNING_RATE=0.0001,
+        N_ROLLOUT_PROCESSES=3,
+        LEARNING_RATE=0.001,
         EXP_GRAD_RATIO=10,
         BATCH_SIZE=256,
         GAMMA=0.95,
@@ -61,11 +57,10 @@ if __name__ == "__main__":
     tb_path = os.path.join('runs', current_time + '_'
                            + hp.ENV_NAME + '_' + hp.EXP_NAME)
 
-    pi = DDPGActor(hp.N_OBS, hp.N_ACTS).to(device)
-    Q = DDPGCritic(hp.N_OBS, hp.N_ACTS).to(device)
+    ddpg = DDPG(hp)
 
     # Playing
-    pi.share_memory()
+    ddpg.share_memory()
     exp_queue = mp.Queue(maxsize=hp.EXP_GRAD_RATIO)
     finish_event = mp.Event()
     sigma_m = mp.Value('f', hp.NOISE_SIGMA_INITIAL)
@@ -75,7 +70,7 @@ if __name__ == "__main__":
         data_proc = mp.Process(
             target=data_func,
             args=(
-                pi,
+                ddpg,
                 device,
                 exp_queue,
                 finish_event,
@@ -88,10 +83,6 @@ if __name__ == "__main__":
         data_proc_list.append(data_proc)
 
     # Training
-    tgt_pi = TargetActor(pi)
-    tgt_Q = TargetCritic(Q)
-    pi_opt = optim.Adam(pi.parameters(), lr=hp.LEARNING_RATE)
-    Q_opt = optim.Adam(Q.parameters(), lr=hp.LEARNING_RATE)
     buffer = ReplayBuffer(buffer_size=hp.REPLAY_SIZE,
                           observation_space=hp.observation_space,
                           action_space=hp.action_space,
@@ -142,37 +133,7 @@ if __name__ == "__main__":
 
             # Sample a batch and load it as a tensor on device
             batch = buffer.sample(hp.BATCH_SIZE)
-            S_v = batch.observations
-            A_v = batch.actions
-            r_v = batch.rewards
-            dones = batch.dones
-            S_next_v = batch.next_observations
-
-            # train critic
-            Q_opt.zero_grad()
-            Q_v = Q(S_v, A_v)  # expected Q for S,A
-            A_next_v = tgt_pi(S_next_v)  # Get an Bootstrap Action for S_next
-            Q_next_v = tgt_Q(S_next_v, A_next_v)  # Bootstrap Q_next
-            Q_next_v[dones == 1.] = 0.0  # No bootstrap if transition is terminal
-            # Calculate a reference Q value using the bootstrap Q
-            Q_ref_v = r_v + Q_next_v * (hp.GAMMA**hp.REWARD_STEPS)
-            Q_loss_v = F.mse_loss(Q_v, Q_ref_v.detach())
-            Q_loss_v.backward()
-            Q_opt.step()
-            metrics["train/loss_Q"] = Q_loss_v.cpu().detach().numpy()
-
-            # train actor - Maximize Q value received over every S
-            pi_opt.zero_grad()
-            A_cur_v = pi(S_v)
-            pi_loss_v = -Q(S_v, A_cur_v)
-            pi_loss_v = pi_loss_v.mean()
-            pi_loss_v.backward()
-            pi_opt.step()
-            metrics["train/loss_pi"] = pi_loss_v.cpu().detach().numpy()
-
-            # Sync target networks
-            tgt_pi.sync(alpha=1 - 1e-3)
-            tgt_Q.sync(alpha=1 - 1e-3)
+            metrics["train/loss_pi"], metrics["train/loss_Q"], _ = ddpg.update(batch)
 
             n_grads += 1
             grad_time = time.perf_counter()
@@ -207,10 +168,10 @@ if __name__ == "__main__":
                         'n_episodes': n_episodes,   
                         'n_grads': n_grads,
                     },
-                    pi=pi,
-                    Q=Q,
-                    pi_opt=pi_opt,
-                    Q_opt=Q_opt
+                    pi=ddpg.pi,
+                    Q=ddpg.Q,
+                    pi_opt=ddpg.pi_opt,
+                    Q_opt=ddpg.Q_opt
                 )
 
             if hp.GIF_FREQUENCY and n_grads % hp.GIF_FREQUENCY == 0:
