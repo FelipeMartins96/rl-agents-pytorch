@@ -121,7 +121,7 @@ def data_func(
 class FMHHP(HyperParameters):
     AGENT: str = "fmh_async"
     PERSIST_COMM: int = 8
-    WORKER_N_OBS: int = 7
+    WORKER_N_OBS: int = 5
     OBJECTIVE_SIZE: int = None
     NOISE_SIGMA_INITIAL: float = None  # Initial action noise sigma
     NOISE_THETA: float = None
