@@ -33,8 +33,7 @@ def generate_gif(
     for t in range(max_episode_steps):
 
         if hp.AGENT not in MA_METHODS:
-            s_v = torch.Tensor(s).to(hp.DEVICE)
-            a = pi.get_action(s_v)
+            a = pi.get_action(s)
             s_next, r, done, info = env.step(a)
 
         elif hp.AGENT == "maddpg_async":
