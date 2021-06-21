@@ -4,6 +4,7 @@ import time
 from dataclasses import dataclass
 
 import gym
+import numpy as np
 import torch
 from agents.ddpg.networks import (DDPGActor, DDPGCritic, TargetActor,
                                   TargetCritic)
@@ -88,6 +89,7 @@ def data_func(
                 if hp.MULTI_AGENT:
                     exp = list()
                     for i in range(hp.N_AGENTS):
+                        s_next[i] = s_next[i] if not done else None
                         kwargs = {
                             'state': s[i],
                             'action': a[i],
@@ -111,6 +113,69 @@ def data_func(
             info['noise'] = noise.sigma
             info['ep_steps'] = ep_steps
             info['ep_rw'] = ep_rw
+            queue_m.put(info)
+
+
+def data_func_strat(
+    pi,
+    queue_m,
+    finish_event_m,
+    sigma_m,
+    gif_req_m,
+    hp
+):
+    env = gym.make(hp.ENV_NAME)
+    noise = OrnsteinUhlenbeckNoise(
+        sigma=sigma_m.value,
+        theta=hp.NOISE_THETA,
+        min_value=env.action_space.low,
+        max_value=env.action_space.high
+    )
+
+    with torch.no_grad():
+        while not finish_event_m.is_set():
+            # Check for generate gif request
+            gif_idx = -1
+            with gif_req_m.get_lock():
+                if gif_req_m.value != -1:
+                    gif_idx = gif_req_m.value
+                    gif_req_m.value = -1
+            if gif_idx != -1:
+                path = os.path.join(hp.GIF_PATH, f"{gif_idx:09d}.gif")
+                generate_gif(env=env, filepath=path,
+                             pi=copy.deepcopy(pi), hp=hp)
+
+            done = False
+            s = env.reset()
+            noise.reset()
+            noise.sigma = sigma_m.value
+            info = {}
+            ep_steps = 0
+            ep_rw = np.array([0]*hp.N_REWS)
+            st_time = time.perf_counter()
+            for i in range(hp.MAX_EPISODE_STEPS):
+                # Step the environment
+                a = pi.get_action(s)
+                a = noise(a)
+                s_next, r, done, info = env.step(a)
+                ep_steps += 1
+                ep_rw += r
+
+                s_next = s_next if not done else None
+                # Trace NStep rewards and add to mp queue
+                exp = ExperienceFirstLast(s, a, r, s_next)
+                queue_m.put(exp)
+
+                if done:
+                    break
+
+                # Set state for next step
+                s = s_next
+
+            info['fps'] = ep_steps / (time.perf_counter() - st_time)
+            info['noise'] = noise.sigma
+            info['ep_steps'] = ep_steps
+            info['ep_rw'] = np.sum(ep_rw)
             queue_m.put(info)
 
 
@@ -160,7 +225,6 @@ class DDPG:
     def update(self, batch):
         pi_loss, Q_loss = self.loss(batch)
 
-
         # train actor - Maximize Q value received over every S
         self.pi_opt.zero_grad()
         pi_loss.backward()
@@ -178,3 +242,69 @@ class DDPG:
         self.tgt_Q.sync(alpha=1 - 1e-3)
         reward_mean = torch.mean(batch.rewards).cpu().numpy()
         return pi_loss, Q_loss, reward_mean
+
+
+@dataclass
+class DDPGStratHP(DDPGHP):
+    AGENT: str = "ddpg_strat_async"
+    N_REWS: int = 4
+    REW_ALPHA: np.ndarray = None
+
+    def __post_init__(self):
+        env = gym.make(self.ENV_NAME)
+        self.N_OBS, self.N_ACTS, self.MAX_EPISODE_STEPS = env.observation_space.shape[
+            0], env.action_space.shape[0], env.spec.max_episode_steps
+        if self.MULTI_AGENT:
+            self.N_AGENTS = env.action_space.shape[0]
+            self.N_ACTS = env.action_space.shape[1]
+            self.N_OBS = env.observation_space.shape[1]
+        self.SAVE_PATH = os.path.join(
+            "saves", self.ENV_NAME, self.AGENT, self.EXP_NAME)
+        self.CHECKPOINT_PATH = os.path.join(self.SAVE_PATH, "checkpoints")
+        self.GIF_PATH = os.path.join(self.SAVE_PATH, "gifs")
+        os.makedirs(self.CHECKPOINT_PATH, exist_ok=True)
+        os.makedirs(self.GIF_PATH, exist_ok=True)
+        self.action_space = env.action_space
+        self.observation_space = env.observation_space
+        if self.MULTI_AGENT:
+            self.action_space.shape = (env.action_space.shape[1], )
+            self.observation_space.shape = (env.observation_space.shape[1], )
+        self.N_REWS = len(env.weights)
+        self.REW_ALPHA = env.weights
+
+
+class DDPGStratRew(DDPG):
+
+    def __init__(self, hp):
+        self.device = hp.DEVICE
+        # Actor-Critic
+        self.pi = DDPGActor(hp.N_OBS, hp.N_ACTS).to(self.device)
+        self.Q = DDPGCritic(hp.N_OBS, hp.N_ACTS, hp.N_REWS).to(self.device)
+        # Training
+        self.tgt_Q = TargetCritic(self.Q)
+        self.tgt_pi = TargetActor(self.pi)
+        self.pi_opt = Adam(self.pi.parameters(), lr=hp.LEARNING_RATE)
+        self.Q_opt = Adam(self.Q.parameters(), lr=hp.LEARNING_RATE)
+
+        self.rew_alpha = torch.Tensor(hp.REW_ALPHA).to(self.device)
+        self.gamma = hp.GAMMA
+
+    def loss(self, batch):
+        state_batch = batch.observations
+        action_batch = batch.actions
+        reward_batch = batch.rewards
+        mask_batch = batch.dones.bool().squeeze()
+        next_state_batch = batch.next_observations
+
+        next_state_action = self.tgt_pi(next_state_batch)
+        qf_next_target = self.tgt_Q(next_state_batch, next_state_action)
+        qf_next_target[mask_batch] = 0.0
+        next_q_value = reward_batch + self.gamma * qf_next_target
+        qf = self.Q(state_batch, action_batch)
+        Q_loss = F.mse_loss(qf, next_q_value.detach())
+
+        pi = self.pi(state_batch)
+        pi_loss = self.Q(state_batch, pi)*self.rew_alpha
+        pi_loss = -pi_loss.mean()
+
+        return pi_loss, Q_loss

@@ -24,7 +24,7 @@ class DDPGActor(nn.Module):
 
 
 class DDPGCritic(nn.Module):
-    def __init__(self, obs_size, act_size):
+    def __init__(self, obs_size, act_size, rewards=1):
         super(DDPGCritic, self).__init__()
 
         self.obs_net = nn.Sequential(
@@ -35,7 +35,7 @@ class DDPGCritic(nn.Module):
         self.out_net = nn.Sequential(
             nn.Linear(400 + act_size, 300),
             nn.ReLU(),
-            nn.Linear(300, 1)
+            nn.Linear(300, rewards)
         )
 
     def forward(self, x, a):
