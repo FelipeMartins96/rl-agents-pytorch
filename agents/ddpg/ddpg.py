@@ -299,12 +299,17 @@ class DDPGStratRew(DDPG):
         next_state_action = self.tgt_pi(next_state_batch)
         qf_next_target = self.tgt_Q(next_state_batch, next_state_action)
         qf_next_target[mask_batch] = 0.0
-        next_q_value = (reward_batch  + self.gamma * qf_next_target )* self.rew_alpha
-        qf = self.Q(state_batch, action_batch)* self.rew_alpha
+        next_q_value = reward_batch + self.gamma * qf_next_target
+        qf = self.Q(state_batch, action_batch)
         Q_loss = F.mse_loss(qf, next_q_value.detach())
+        # print('reward_batch', reward_batch)
+        # print('qf', qf)
+        # print('next_q', next_q_value)
+        # print('Q_loss', Q_loss)
 
         pi = self.pi(state_batch)
-        pi_loss = self.Q(state_batch, pi)*self.rew_alpha
+        Q_values_strat = self.Q(state_batch, pi)
+        pi_loss = (Q_values_strat*self.rew_alpha).sum(1)
         pi_loss = -pi_loss.mean()
 
         return pi_loss, Q_loss
