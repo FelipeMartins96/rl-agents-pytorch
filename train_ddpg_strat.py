@@ -35,7 +35,7 @@ if __name__ == "__main__":
         EXP_NAME=args.name,
         DEVICE=device,
         ENV_NAME=args.env,
-        N_ROLLOUT_PROCESSES=2,
+        N_ROLLOUT_PROCESSES=3,
         LEARNING_RATE=0.001,
         EXP_GRAD_RATIO=10,
         BATCH_SIZE=256,
