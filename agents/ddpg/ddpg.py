@@ -323,8 +323,9 @@ class DDPGStratRew(DDPG):
 
         rew_mean = np.mean(self.last_epi_rewards, 0)
         rew_mean = torch.from_numpy(rew_mean).to(self.device)
-        dQ = torch.clamp((self.r_max - rew_mean)/(self.r_max - self.r_min), 0, 1)
-        rew_alpha = torch.exp(dQ)/torch.sum(torch.exp(dQ), 0)
+        min_rews = torch.min((self.r_max - rew_mean)/(self.r_max - self.r_min))
+        dQ = torch.max(min_rews, 0)
+        rew_alpha = (torch.exp(dQ)-1)/torch.sum(torch.exp(dQ)-0.999, 0)
 
         pi = self.pi(state_batch)
         Q_values_strat = self.Q(state_batch, pi)
