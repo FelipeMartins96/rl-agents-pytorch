@@ -5,9 +5,6 @@ import rsoccer_gym
 import torch
 import os
 
-import wandb
-
-
 @dataclasses.dataclass
 class HyperParameters:
     """Class containing all experiment hyperparameters"""
@@ -38,7 +35,7 @@ class HyperParameters:
     def __post_init__(self):
         env = gym.make(self.ENV_NAME)
         self.N_OBS, self.N_ACTS, self.MAX_EPISODE_STEPS = env.observation_space.shape[
-            0], env.action_space.shape[0], env.spec.max_episode_steps
+                                                              0], env.action_space.shape[0], env.spec.max_episode_steps
         if self.MULTI_AGENT:
             self.N_AGENTS = env.action_space.shape[0]
             self.N_ACTS = env.action_space.shape[1]
@@ -52,13 +49,13 @@ class HyperParameters:
         self.action_space = env.action_space
         self.observation_space = env.observation_space
         if self.MULTI_AGENT:
-            self.action_space.shape = (env.action_space.shape[1], )
-            self.observation_space.shape = (env.observation_space.shape[1], )
+            self.action_space.shape = (env.action_space.shape[1],)
+            self.observation_space.shape = (env.observation_space.shape[1],)
 
 
 def unpack_batch(
-    batch,
-    device="cpu"
+        batch,
+        device="cpu"
 ):
     '''From a batch of experience, return values in Tensor form on device'''
     states, actions, rewards, dones, last_states = [], [], [], [], []
@@ -80,12 +77,12 @@ def unpack_batch(
 
 
 def save_checkpoint(
-    hp,
-    metrics,
-    pi,
-    Q,
-    pi_opt,
-    Q_opt
+        hp,
+        metrics,
+        pi,
+        Q,
+        pi_opt,
+        Q_opt
 ):
     checkpoint = dataclasses.asdict(hp)
     checkpoint.update(metrics)
@@ -106,3 +103,12 @@ def save_checkpoint(
     filename = os.path.join(
         hp.CHECKPOINT_PATH, "checkpoint_{:09}.pth".format(metrics['n_grads']))
     torch.save(checkpoint, filename)
+
+
+def load_checkpoint(agent, checkpoint_file_path):
+    checkpoint = torch.load(checkpoint_file_path)
+
+    agent.pi.load_state_dict(checkpoint['pi_state_dict'])
+    agent.Q.load_state_dict(checkpoint['Q_state_dict'])
+    agent.tgt_Q.target_model.load_state_dict(checkpoint['Q_state_dict'])
+    return checkpoint

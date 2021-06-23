@@ -14,7 +14,7 @@ import torch.optim as optim
 
 import wandb
 from agents.ddpg import (DDPGStratHP, data_func, DDPGStratRew)
-from agents.utils import ReplayBuffer, save_checkpoint, unpack_batch, ExperienceFirstLast
+from agents.utils import ReplayBuffer, save_checkpoint, load_checkpoint, unpack_batch, ExperienceFirstLast
 import pyvirtualdisplay
 
 if __name__ == "__main__":
@@ -27,6 +27,10 @@ if __name__ == "__main__":
                         help="Name of the run")
     parser.add_argument("-e", "--env", required=True,
                         help="Name of the gym environment")
+
+    parser.add_argument("-l", "--load",
+                        help="path to a checkpoint")
+
     args = parser.parse_args()
     device = "cuda" if args.cuda else "cpu"
 
@@ -58,6 +62,9 @@ if __name__ == "__main__":
                            + hp.ENV_NAME + '_' + hp.EXP_NAME)
 
     ddpg = DDPGStratRew(hp)
+
+    if args.load:
+        load_checkpoint(ddpg, args.load)
 
     # Playing
     ddpg.share_memory()
@@ -195,6 +202,5 @@ if __name__ == "__main__":
             p.join()
 
         del(exp_queue)
-        del(pi)
 
         finish_event.set()
