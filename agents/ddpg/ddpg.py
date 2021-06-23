@@ -9,7 +9,7 @@ import torch
 from agents.ddpg.networks import (DDPGActor, DDPGCritic, TargetActor,
                                   TargetCritic)
 from agents.utils import (ExperienceFirstLast, HyperParameters, NStepTracer,
-                          OrnsteinUhlenbeckNoise, generate_gif)
+                          OrnsteinUhlenbeckNoise, ReplayBuffer, generate_gif)
 from torch.nn import functional as F
 from torch.optim import Adam
 
@@ -159,7 +159,7 @@ def data_func_strat(
                 a = noise(a)
                 s_next, r, done, info = env.step(a)
                 ep_steps += 1
-                ep_rw += r
+                ep_rw = ep_rw + r
 
                 s_next = s_next if not done else None
                 # Trace NStep rewards and add to mp queue
@@ -171,11 +171,12 @@ def data_func_strat(
 
                 # Set state for next step
                 s = s_next
-
             info['fps'] = ep_steps / (time.perf_counter() - st_time)
             info['noise'] = noise.sigma
             info['ep_steps'] = ep_steps
             info['ep_rw'] = np.sum(ep_rw)
+            info['rw_strat'] = ep_rw
+
             queue_m.put(info)
 
 
@@ -286,8 +287,25 @@ class DDPGStratRew(DDPG):
         self.pi_opt = Adam(self.pi.parameters(), lr=hp.LEARNING_RATE)
         self.Q_opt = Adam(self.Q.parameters(), lr=hp.LEARNING_RATE)
 
-        self.rew_alpha = torch.Tensor(hp.REW_ALPHA).to(self.device)
+        self.r_max = torch.Tensor([150, 27.5, 0, 10]).to(self.device)
+        self.r_min = torch.Tensor([-25, -35, -1000, -10]).to(self.device)
+
+        self.last_epi_rewards = []
         self.gamma = hp.GAMMA
+        self.buffer = ReplayBuffer(buffer_size=hp.REPLAY_SIZE,
+                                   observation_space=hp.observation_space,
+                                   action_space=hp.action_space,
+                                   device=hp.DEVICE,
+                                   strat_size=hp.N_REWS
+                                   )
+        self.hp = hp
+
+    def put_epi_rw(self, rewards):
+        if len(self.last_epi_rewards) > 1000:
+            idx = self.buffer.size() % 1000
+            self.last_epi_rewards[idx](rewards)
+        else:
+            self.last_epi_rewards.append(rewards)
 
     def loss(self, batch):
         state_batch = batch.observations
@@ -302,14 +320,37 @@ class DDPGStratRew(DDPG):
         next_q_value = reward_batch + self.gamma * qf_next_target
         qf = self.Q(state_batch, action_batch)
         Q_loss = F.mse_loss(qf, next_q_value.detach())
-        # print('reward_batch', reward_batch)
-        # print('qf', qf)
-        # print('next_q', next_q_value)
-        # print('Q_loss', Q_loss)
+
+
+        rew_mean = np.mean(self.last_epi_rewards, 0)
+        rew_mean = torch.from_numpy(rew_mean).to(self.device)
+        dQ = (self.r_max - rew_mean)/(self.r_max - self.r_min)
+        rew_alpha = torch.exp(dQ)/torch.sum(torch.exp(dQ), 0)
+        rew_alpha = torch.clip(rew_alpha, 0, 1)
 
         pi = self.pi(state_batch)
         Q_values_strat = self.Q(state_batch, pi)
-        pi_loss = (Q_values_strat*self.rew_alpha).sum(1)
+        pi_loss = (Q_values_strat*rew_alpha).sum(1)
         pi_loss = -pi_loss.mean()
 
-        return pi_loss, Q_loss
+        return pi_loss, Q_loss, rew_alpha.cpu().detach().numpy()
+    
+    def update(self, batch):
+        pi_loss, Q_loss, alphas = self.loss(batch)
+
+        # train actor - Maximize Q value received over every S
+        self.pi_opt.zero_grad()
+        pi_loss.backward()
+        self.pi_opt.step()
+
+        # train critic
+        self.Q_opt.zero_grad()
+        Q_loss.backward()
+        self.Q_opt.step()
+
+        pi_loss = pi_loss.cpu().detach().numpy()
+        Q_loss = Q_loss.cpu().detach().numpy()
+
+        # Sync target networks
+        self.tgt_Q.sync(alpha=1 - 1e-3)
+        return pi_loss, Q_loss, alphas

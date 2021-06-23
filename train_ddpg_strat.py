@@ -13,7 +13,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 import wandb
-from agents.ddpg import (DDPGStratHP, data_func, DDPGStratRew)
+from agents.ddpg import (DDPGStratHP, data_func_strat, DDPGStratRew)
 from agents.utils import ReplayBuffer, save_checkpoint, unpack_batch, ExperienceFirstLast
 import pyvirtualdisplay
 
@@ -68,10 +68,9 @@ if __name__ == "__main__":
     data_proc_list = []
     for _ in range(hp.N_ROLLOUT_PROCESSES):
         data_proc = mp.Process(
-            target=data_func,
+            target=data_func_strat,
             args=(
                 ddpg,
-                device,
                 exp_queue,
                 finish_event,
                 sigma_m,
@@ -83,12 +82,6 @@ if __name__ == "__main__":
         data_proc_list.append(data_proc)
 
     # Training
-    buffer = ReplayBuffer(buffer_size=hp.REPLAY_SIZE,
-                          observation_space=hp.observation_space,
-                          action_space=hp.action_space,
-                          device=hp.DEVICE,
-                          strat_size=hp.N_REWS
-                          )
     n_grads = 0
     n_samples = 0
     n_episodes = 0
@@ -113,10 +106,12 @@ if __name__ == "__main__":
                 if isinstance(safe_exp, dict):
                     logs = {"ep_info/"+key: value for key,
                             value in safe_exp.items() if 'truncated' not in key}
+                    rw_strat = logs.pop('ep_info/rw_strat')
+                    ddpg.put_epi_rw(rw_strat)
                     ep_infos.append(logs)
                     n_episodes += 1
                 else:
-                    buffer.add(
+                    ddpg.buffer.add(
                     obs=safe_exp.state,
                     next_obs=safe_exp.last_state if safe_exp.last_state is not None else safe_exp.state,
                     action=safe_exp.action,
@@ -129,13 +124,15 @@ if __name__ == "__main__":
 
 
             # Only start training after buffer is larger than initial value
-            if buffer.size() < hp.REPLAY_INITIAL:
+            if ddpg.buffer.size() < hp.REPLAY_INITIAL:
                 continue
 
             # Sample a batch and load it as a tensor on device
-            batch = buffer.sample(hp.BATCH_SIZE)
-            metrics["train/loss_pi"], metrics["train/loss_Q"], _ = ddpg.update(batch)
-
+            batch = ddpg.buffer.sample(hp.BATCH_SIZE)
+            metrics["train/loss_pi"], metrics["train/loss_Q"], alphas = ddpg.update(batch)
+            alpha_names = ['move', 'ball_grad', 'energy', 'goal'] 
+            for i, name in enumerate(alpha_names):
+                metrics[f'train/alpha_{name}'] = alphas[i]
             n_grads += 1
             grad_time = time.perf_counter()
             metrics['speed/samples'] = new_samples/(sample_time - st_time)
@@ -144,7 +141,7 @@ if __name__ == "__main__":
             metrics['counters/samples'] = n_samples
             metrics['counters/grads'] = n_grads
             metrics['counters/episodes'] = n_episodes
-            metrics["counters/buffer_len"] = buffer.size()
+            metrics["counters/buffer_len"] = ddpg.buffer.size()
 
             if ep_infos:
                 for key in ep_infos[0].keys():
@@ -195,6 +192,4 @@ if __name__ == "__main__":
             p.join()
 
         del(exp_queue)
-        del(pi)
-
         finish_event.set()
