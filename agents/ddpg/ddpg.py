@@ -303,7 +303,7 @@ class DDPGStratRew(DDPG):
     def put_epi_rw(self, rewards):
         if len(self.last_epi_rewards) > 1000:
             idx = self.buffer.size() % 1000
-            self.last_epi_rewards[idx](rewards)
+            self.last_epi_rewards[idx] = rewards
         else:
             self.last_epi_rewards.append(rewards)
 
