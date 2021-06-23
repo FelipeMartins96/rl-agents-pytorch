@@ -287,8 +287,8 @@ class DDPGStratRew(DDPG):
         self.pi_opt = Adam(self.pi.parameters(), lr=hp.LEARNING_RATE)
         self.Q_opt = Adam(self.Q.parameters(), lr=hp.LEARNING_RATE)
 
-        self.r_max = torch.Tensor([1, 1, 0, 1]).to(self.device)
-        self.r_min = torch.Tensor([-1, -1, -2, -1]).to(self.device)
+        self.r_max = np.array([1, 1, 0, 1])
+        self.r_min = np.array([-1, -1, -2, -1])
 
         self.last_epi_rewards = []
         self.gamma = hp.GAMMA
@@ -322,9 +322,9 @@ class DDPGStratRew(DDPG):
         Q_loss = F.mse_loss(qf, next_q_value.detach())
 
         rew_mean = np.mean(self.last_epi_rewards, 0)
-        rew_mean = torch.from_numpy(rew_mean).to(self.device)
-        min_rews = torch.min((self.r_max - rew_mean)/(self.r_max - self.r_min))
-        dQ = torch.max(min_rews, 0)
+        min_rews = np.minimum((self.r_max - rew_mean)/(self.r_max - self.r_min), 1)
+        dQ = np.maximum(min_rews, 0)
+        dQ = torch.from_numpy(dQ).to(self.device)
         rew_alpha = (torch.exp(dQ)-1)/torch.sum(torch.exp(dQ)-0.999, 0)
 
         pi = self.pi(state_batch)
