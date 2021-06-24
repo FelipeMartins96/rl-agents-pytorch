@@ -319,7 +319,8 @@ class DDPGStratRew(DDPG):
         qf_next_target[mask_batch] = 0.0
         next_q_value = reward_batch + self.gamma * qf_next_target
         qf = self.Q(state_batch, action_batch)
-        Q_loss = F.mse_loss(qf, next_q_value.detach())
+        Q_loss_strat = ((qf-next_q_value.detach())**2).mean(0)
+        Q_loss = Q_loss_strat.mean()
 
         rew_mean = np.mean(self.last_epi_rewards, 0)
         min_rews = np.minimum((self.r_max - rew_mean)/(self.r_max - self.r_min), 1)
@@ -332,10 +333,10 @@ class DDPGStratRew(DDPG):
         pi_loss = (Q_values_strat*rew_alpha).sum(1)
         pi_loss = -pi_loss.mean()
 
-        return pi_loss, Q_loss, rew_alpha.cpu().detach().numpy()
-    
+        return pi_loss, Q_loss, rew_alpha.cpu().detach().numpy(), Q_loss_strat.cpu().detach().numpy()
+
     def update(self, batch):
-        pi_loss, Q_loss, alphas = self.loss(batch)
+        pi_loss, Q_loss, alphas, Q_loss_strat = self.loss(batch)
 
         # train actor - Maximize Q value received over every S
         self.pi_opt.zero_grad()
@@ -352,4 +353,4 @@ class DDPGStratRew(DDPG):
 
         # Sync target networks
         self.tgt_Q.sync(alpha=1 - 1e-3)
-        return pi_loss, Q_loss, alphas
+        return pi_loss, Q_loss, alphas, Q_loss_strat
