@@ -287,8 +287,9 @@ class DDPGStratRew(DDPG):
         self.pi_opt = Adam(self.pi.parameters(), lr=hp.LEARNING_RATE)
         self.Q_opt = Adam(self.Q.parameters(), lr=hp.LEARNING_RATE)
 
-        self.r_max = np.array([1, 1, 0, 1])
-        self.r_min = np.array([-1, -1, -2, -1])
+        self.r_max = torch.Tensor([1, 1,  0, 1]).to(self.device)
+        self.r_min = torch.Tensor([0, -1, -2, -1]).to(self.device)
+        self.reward_scaling = 100
 
         self.last_epi_rewards = []
         self.gamma = hp.GAMMA
@@ -301,7 +302,7 @@ class DDPGStratRew(DDPG):
         self.hp = hp
 
     def put_epi_rw(self, rewards):
-        if len(self.last_epi_rewards) > 100:
+        if len(self.last_epi_rewards) > 1000:
             self.last_epi_rewards.append(rewards)
             self.last_epi_rewards = self.last_epi_rewards[1:]
         else:
@@ -310,7 +311,7 @@ class DDPGStratRew(DDPG):
     def loss(self, batch):
         state_batch = batch.observations
         action_batch = batch.actions
-        reward_batch = batch.rewards
+        reward_batch = self.reward_scaling*batch.rewards
         mask_batch = batch.dones.bool().squeeze()
         next_state_batch = batch.next_observations
 
@@ -319,14 +320,21 @@ class DDPGStratRew(DDPG):
         qf_next_target[mask_batch] = 0.0
         next_q_value = reward_batch + self.gamma * qf_next_target
         qf = self.Q(state_batch, action_batch)
-        Q_loss_strat = ((qf-next_q_value.detach())**2).mean(0)
-        Q_loss = Q_loss_strat.mean()
 
-        rew_mean = np.mean(self.last_epi_rewards, 0)
-        min_rews = np.minimum((self.r_max - rew_mean)/(self.r_max - self.r_min), 1)
-        dQ = np.maximum(min_rews, 0)
-        dQ = torch.from_numpy(dQ).to(self.device)
-        rew_alpha = (torch.exp(dQ)-1)/torch.sum(torch.exp(dQ)-0.999, 0)
+        # Compute per component loss:
+        Q_loss_strat = torch.Tensor([0.0, 0.0, 0.0, 0.0]).to(self.device)
+        for i in range(qf.shape[1]):
+            Q_loss_strat[i] = F.smooth_l1_loss(qf[:, i], next_q_value[:, i].detach())
+
+        # Q_loss = F.mse_loss(qf, next_q_value.detach())
+        Q_loss = F.smooth_l1_loss(qf, next_q_value.detach())
+
+        # rew_mean = torch.Tensor(np.mean(self.last_epi_rewards, 0)).to(self.device)
+        # min_rews = np.minimum((self.r_max - rew_mean)/(self.r_max - self.r_min), 1)
+        # dQ = np.maximum(min_rews, 0)
+        # dQ = torch.from_numpy(dQ).to(self.device)
+        # # rew_alpha = (torch.exp(dQ)-1)/torch.sum(torch.exp(dQ)-0.999, 0)
+        rew_alpha = torch.Tensor([0.333, 0.333, 0.222, 0.111]).to(self.device)
 
         pi = self.pi(state_batch)
         Q_values_strat = self.Q(state_batch, pi)
