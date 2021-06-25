@@ -301,11 +301,11 @@ class DDPGStratRew(DDPG):
         qf_next_target[mask_batch] = 0.0
         next_q_value = reward_batch + self.gamma * qf_next_target
         qf = self.Q(state_batch, action_batch)
-        Q_loss = F.smooth_l1_loss(qf, next_q_value.detach())
+        Q_loss = F.mse_loss(qf, next_q_value.detach())
         # Compute per component loss:
         Q_loss_strat = torch.Tensor([0.0, 0.0, 0.0, 0.0]).to(self.device)
         for i in range(qf.shape[1]):
-            Q_loss_strat[i] = F.smooth_l1_loss(qf[:, i], next_q_value[:, i].detach())
+            Q_loss_strat[i] = F.mse_loss(qf[:, i], next_q_value[:, i].detach())
         # print('reward_batch', reward_batch)
         # print('qf', qf)
         # print('next_q', next_q_value)
