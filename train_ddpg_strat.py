@@ -1,3 +1,4 @@
+from agents.ddpg.ddpg import data_func_strat
 import argparse
 import copy
 import dataclasses
@@ -76,10 +77,9 @@ if __name__ == "__main__":
     data_proc_list = []
     for _ in range(hp.N_ROLLOUT_PROCESSES):
         data_proc = mp.Process(
-            target=data_func,
+            target=data_func_strat,
             args=(
                 ddpg,
-                device,
                 exp_queue,
                 finish_event,
                 sigma_m,

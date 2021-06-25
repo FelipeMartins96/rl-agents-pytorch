@@ -159,7 +159,7 @@ def data_func_strat(
                 a = noise(a)
                 s_next, r, done, info = env.step(a)
                 ep_steps += 1
-                ep_rw += r
+                ep_rw = ep_rw + r
 
                 s_next = s_next if not done else None
                 # Trace NStep rewards and add to mp queue
