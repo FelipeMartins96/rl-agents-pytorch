@@ -316,7 +316,7 @@ class DDPGStratRew(DDPG):
         pi_loss = (Q_values_strat*self.rew_alpha).sum(1)
         pi_loss = -pi_loss.mean()
 
-        return pi_loss, Q_loss, Q_loss_strat.detach().cpu().numpy(), qf.mean(0).detach().cpu().numpy(), next_q_value.mean(0).detach().cpu().numpy()
+        return pi_loss, Q_loss, Q_loss_strat.detach().cpu().numpy(), qf.sum(0).detach().cpu().numpy(), next_q_value.sum(0).detach().cpu().numpy()
 
     def update(self, batch):
         pi_loss, Q_loss, Q_loss_strat, qf, next_qf = self.loss(batch)
