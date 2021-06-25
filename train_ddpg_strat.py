@@ -129,10 +129,11 @@ if __name__ == "__main__":
 
             # Sample a batch and load it as a tensor on device
             batch = ddpg.buffer.sample(hp.BATCH_SIZE)
-            metrics["train/loss_pi"], metrics["train/loss_Q"], alphas = ddpg.update(batch)
+            metrics["train/loss_pi"], metrics["train/loss_Q"], alphas, strat_q = ddpg.update(batch)
             alpha_names = ['move', 'ball_grad', 'energy', 'goal'] 
             for i, name in enumerate(alpha_names):
                 metrics[f'train/alpha_{name}'] = alphas[i]
+                metrics[f'train/Q_loss_{name}'] = strat_q[i]
             n_grads += 1
             grad_time = time.perf_counter()
             metrics['speed/samples'] = new_samples/(sample_time - st_time)
