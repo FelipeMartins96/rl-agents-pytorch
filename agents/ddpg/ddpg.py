@@ -301,7 +301,11 @@ class DDPGStratRew(DDPG):
         qf_next_target[mask_batch] = 0.0
         next_q_value = reward_batch + self.gamma * qf_next_target
         qf = self.Q(state_batch, action_batch)
-        Q_loss = F.mse_loss(qf, next_q_value.detach())
+        Q_loss = F.smooth_l1_loss(qf, next_q_value.detach())
+        # Compute per component loss:
+        Q_loss_strat = torch.Tensor([0.0, 0.0, 0.0, 0.0]).to(self.device)
+        for i in range(qf.shape[1]):
+            Q_loss_strat[i] = F.smooth_l1_loss(qf[:, i], next_q_value[:, i].detach())
         # print('reward_batch', reward_batch)
         # print('qf', qf)
         # print('next_q', next_q_value)
@@ -312,4 +316,25 @@ class DDPGStratRew(DDPG):
         pi_loss = (Q_values_strat*self.rew_alpha).sum(1)
         pi_loss = -pi_loss.mean()
 
-        return pi_loss, Q_loss
+        return pi_loss, Q_loss, Q_loss_strat.detach().cpu().numpy(), qf.mean(0).detach().cpu().numpy(), next_q_value.mean(0).detach().cpu().numpy()
+
+    def update(self, batch):
+        pi_loss, Q_loss, Q_loss_strat, qf, next_qf = self.loss(batch)
+
+        # train actor - Maximize Q value received over every S
+        self.pi_opt.zero_grad()
+        pi_loss.backward()
+        self.pi_opt.step()
+
+        # train critic
+        self.Q_opt.zero_grad()
+        Q_loss.backward()
+        self.Q_opt.step()
+
+        pi_loss = pi_loss.cpu().detach().numpy()
+        Q_loss = Q_loss.cpu().detach().numpy()
+
+        # Sync target networks
+        self.tgt_Q.sync(alpha=1 - 1e-3)
+        reward_mean = torch.mean(batch.rewards, 0).cpu().numpy()
+        return pi_loss, Q_loss, reward_mean, Q_loss_strat, qf, next_qf

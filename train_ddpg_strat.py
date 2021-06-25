@@ -56,7 +56,8 @@ if __name__ == "__main__":
         GIF_FREQUENCY=10000,
         TOTAL_GRAD_STEPS=2000000.
     )
-    wandb.init(project='RoboCIn-RL', name=hp.EXP_NAME,  entity='robocin', config=hp.to_dict())
+    wandb.init(project='RoboCIn-RL', name=hp.EXP_NAME,
+               entity='robocin', config=hp.to_dict())
     current_time = datetime.datetime.now().strftime('%b-%d_%H-%M-%S')
     tb_path = os.path.join('runs', current_time + '_'
                            + hp.ENV_NAME + '_' + hp.EXP_NAME)
@@ -124,16 +125,15 @@ if __name__ == "__main__":
                     n_episodes += 1
                 else:
                     buffer.add(
-                    obs=safe_exp.state,
-                    next_obs=safe_exp.last_state if safe_exp.last_state is not None else safe_exp.state,
-                    action=safe_exp.action,
-                    reward=safe_exp.reward,
-                    done=False if safe_exp.last_state is not None else True
+                        obs=safe_exp.state,
+                        next_obs=safe_exp.last_state if safe_exp.last_state is not None else safe_exp.state,
+                        action=safe_exp.action,
+                        reward=safe_exp.reward,
+                        done=False if safe_exp.last_state is not None else True
                     )
                     new_samples += 1
             n_samples += new_samples
             sample_time = time.perf_counter()
-
 
             # Only start training after buffer is larger than initial value
             if buffer.size() < hp.REPLAY_INITIAL:
@@ -141,7 +141,14 @@ if __name__ == "__main__":
 
             # Sample a batch and load it as a tensor on device
             batch = buffer.sample(hp.BATCH_SIZE)
-            metrics["train/loss_pi"], metrics["train/loss_Q"], _ = ddpg.update(batch)
+            metrics["train/loss_pi"], metrics["train/loss_Q"], rews, q_strat, qf, next_qf = ddpg.update(
+                batch)
+            names = ['move', 'ball_grad', 'energy', 'goal']
+            for i, name in enumerate(names):
+                metrics[f"train/rew_{name}"] = rews[i]
+                metrics[f"train/loss_{name}"] = q_strat[i]
+                metrics[f"train/Q_{name}"] = qf[i]
+                metrics[f"train/Q_next_{name}"] = next_qf[i]
 
             n_grads += 1
             grad_time = time.perf_counter()
@@ -161,7 +168,7 @@ if __name__ == "__main__":
             wandb.log(metrics)
 
             if hp.NOISE_SIGMA_DECAY and sigma_m.value > hp.NOISE_SIGMA_MIN \
-                and n_grads % hp.NOISE_SIGMA_GRAD_STEPS == 0:
+                    and n_grads % hp.NOISE_SIGMA_GRAD_STEPS == 0:
                 # This syntax is needed to be process-safe
                 # The noise sigma value is accessed by the playing processes
                 with sigma_m.get_lock():
@@ -173,7 +180,7 @@ if __name__ == "__main__":
                     metrics={
                         'noise_sigma': sigma_m.value,
                         'n_samples': n_samples,
-                        'n_episodes': n_episodes,   
+                        'n_episodes': n_episodes,
                         'n_grads': n_grads,
                     },
                     pi=ddpg.pi,
