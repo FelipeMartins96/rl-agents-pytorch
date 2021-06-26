@@ -146,7 +146,7 @@ if __name__ == "__main__":
             names = ['move', 'ball_grad', 'energy', 'goal']
             for i, name in enumerate(names):
                 metrics[f"train/rew_{name}"] = rews[i]
-                metrics[f"train/loss_{name}"] = q_strat[i]
+                metrics[f"train/Q_loss_{name}"] = q_strat[i]
                 metrics[f"train/Q_{name}"] = qf[i]
                 metrics[f"train/Q_next_{name}"] = next_qf[i]
 
