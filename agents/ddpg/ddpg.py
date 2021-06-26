@@ -287,7 +287,7 @@ class DDPGStratRew(DDPG):
         self.Q_opt = Adam(self.Q.parameters(), lr=hp.LEARNING_RATE)
 
         self.rew_alpha = torch.Tensor(hp.REW_ALPHA).to(self.device)
-        self.gamma = hp.GAMMA**hp.REWARD_STEPS
+        self.gamma = hp.GAMMA
 
     def loss(self, batch):
         state_batch = batch.observations
@@ -302,20 +302,17 @@ class DDPGStratRew(DDPG):
         next_q_value = reward_batch + self.gamma * qf_next_target
         qf = self.Q(state_batch, action_batch)
         Q_loss = F.mse_loss(qf, next_q_value.detach())
-        # Compute per component loss:
-        Q_loss_strat = torch.Tensor([0.0, 0.0, 0.0, 0.0]).to(self.device)
-        for i in range(qf.shape[1]):
-            Q_loss_strat[i] = F.mse_loss(qf[:, i], next_q_value[:, i].detach())
+        sampled_reward = batch.rewards[21].detach().cpu().numpy()
 
         pi = self.pi(state_batch)
         Q_values_strat = self.Q(state_batch, pi)
         pi_loss = (Q_values_strat*self.rew_alpha).sum(1)
         pi_loss = -pi_loss.mean()
 
-        return pi_loss, Q_loss, Q_loss_strat.detach().cpu().numpy(), qf.sum(0).detach().cpu().numpy(), next_q_value.sum(0).detach().cpu().numpy()
+        return pi_loss, Q_loss, qf[21].detach().cpu().numpy(), next_q_value[21].detach().cpu().numpy(), sampled_reward
 
     def update(self, batch):
-        pi_loss, Q_loss, Q_loss_strat, qf, next_qf = self.loss(batch)
+        pi_loss, Q_loss, qf, next_qf, reward = self.loss(batch)
 
         # train actor - Maximize Q value received over every S
         self.pi_opt.zero_grad()
@@ -332,5 +329,4 @@ class DDPGStratRew(DDPG):
 
         # Sync target networks
         self.tgt_Q.sync(alpha=1 - 1e-3)
-        reward_mean = torch.mean(batch.rewards, 0).cpu().numpy()
-        return pi_loss, Q_loss, reward_mean, Q_loss_strat, qf, next_qf
+        return pi_loss, Q_loss, reward, qf, next_qf

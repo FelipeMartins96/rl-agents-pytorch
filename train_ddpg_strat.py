@@ -142,12 +142,11 @@ if __name__ == "__main__":
 
             # Sample a batch and load it as a tensor on device
             batch = buffer.sample(hp.BATCH_SIZE)
-            metrics["train/loss_pi"], metrics["train/loss_Q"], rews, q_strat, qf, next_qf = ddpg.update(
+            metrics["train/loss_pi"], metrics["train/loss_Q"], rews, qf, next_qf = ddpg.update(
                 batch)
             names = ['move', 'ball_grad', 'energy', 'goal']
             for i, name in enumerate(names):
                 metrics[f"train/rew_{name}"] = rews[i]
-                metrics[f"train/Q_loss_{name}"] = q_strat[i]
                 metrics[f"train/Q_{name}"] = qf[i]
                 metrics[f"train/Q_next_{name}"] = next_qf[i]
 
