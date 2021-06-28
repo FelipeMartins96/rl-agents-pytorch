@@ -288,9 +288,9 @@ class DDPGStratRew(DDPG):
         self.pi_opt = Adam(self.pi.parameters(), lr=hp.LEARNING_RATE)
         self.Q_opt = Adam(self.Q.parameters(), lr=hp.LEARNING_RATE)
 
-        self.r_max = torch.Tensor([0.5,  1,  0,  1]).to(self.device)
-        self.r_min = torch.Tensor([0.0, -1, -1, -1]).to(self.device)
-        self.reward_scaling = 1
+        self.reward_scaling = 1000
+        self.r_max = torch.Tensor([1,  1,  0,  1]).to(self.device)*self.reward_scaling
+        self.r_min = torch.Tensor([-1, -1, -1, -1]).to(self.device)*self.reward_scaling
 
         self.last_epi_rewards = []
         self.gamma = hp.GAMMA
@@ -331,10 +331,10 @@ class DDPGStratRew(DDPG):
         Q_loss = F.smooth_l1_loss(qf, next_q_value.detach())
 
         # compute alphas
-        rew_mean = torch.from_numpy(np.mean(self.last_epi_rewards, 0)).to(self.device)
+        rew_mean = torch.from_numpy(np.mean(reward_batch, 0)).to(self.device)
         dQ = torch.clamp((self.r_max - rew_mean)/(self.r_max - self.r_min), 0, 1)
-        rew_alpha = torch.exp(dQ)-1
-        # rew_alpha = expdQ/(torch.sum(expdQ, 0)+0.0001)
+        expdQ = torch.exp(dQ)-1
+        rew_alpha = expdQ/(torch.sum(expdQ, 0)+0.0001)
 
         # rew_alpha = torch.Tensor([0.333, 0.333, 0.222, 0.111]).to(self.device)
 
