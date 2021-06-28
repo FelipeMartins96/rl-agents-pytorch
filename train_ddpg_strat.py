@@ -7,15 +7,17 @@ import time
 
 import gym
 import numpy as np
+import pyvirtualdisplay
 import rsoccer_gym
 import torch.multiprocessing as mp
 import torch.nn.functional as F
 import torch.optim as optim
 
 import wandb
-from agents.ddpg import (DDPGStratHP, data_func_strat, DDPGStratRew)
-from agents.utils import ReplayBuffer, save_checkpoint, unpack_batch, ExperienceFirstLast
-import pyvirtualdisplay
+from agents.ddpg import DDPGStratHP, DDPGStratRew, data_func_strat
+from agents.utils import (ExperienceFirstLast, ReplayBuffer, save_checkpoint,
+                          unpack_batch)
+from agents.utils.experiment import load_checkpoint
 
 if __name__ == "__main__":
     mp.set_start_method('spawn')
@@ -27,6 +29,8 @@ if __name__ == "__main__":
                         help="Name of the run")
     parser.add_argument("-e", "--env", required=True,
                         help="Name of the gym environment")
+    parser.add_argument("-l", "--load",
+                        help="path to a checkpoint")
     args = parser.parse_args()
     device = "cuda" if args.cuda else "cpu"
 
@@ -52,12 +56,16 @@ if __name__ == "__main__":
         GIF_FREQUENCY=10000,
         TOTAL_GRAD_STEPS=2000000.
     )
-    wandb.init(project='RoboCIn-RL', name=hp.EXP_NAME,  entity='robocin', config=hp.to_dict())
+    wandb.init(project='RoboCIn-RL', name=hp.EXP_NAME,
+               entity='robocin', config=hp.to_dict())
     current_time = datetime.datetime.now().strftime('%b-%d_%H-%M-%S')
     tb_path = os.path.join('runs', current_time + '_'
                            + hp.ENV_NAME + '_' + hp.EXP_NAME)
 
     ddpg = DDPGStratRew(hp)
+
+    if args.load:
+        load_checkpoint(ddpg, args.load)
 
     # Playing
     ddpg.share_memory()
@@ -112,16 +120,15 @@ if __name__ == "__main__":
                     n_episodes += 1
                 else:
                     ddpg.buffer.add(
-                    obs=safe_exp.state,
-                    next_obs=safe_exp.last_state if safe_exp.last_state is not None else safe_exp.state,
-                    action=safe_exp.action,
-                    reward=safe_exp.reward,
-                    done=False if safe_exp.last_state is not None else True
+                        obs=safe_exp.state,
+                        next_obs=safe_exp.last_state if safe_exp.last_state is not None else safe_exp.state,
+                        action=safe_exp.action,
+                        reward=safe_exp.reward,
+                        done=False if safe_exp.last_state is not None else True
                     )
                     new_samples += 1
             n_samples += new_samples
             sample_time = time.perf_counter()
-
 
             # Only start training after buffer is larger than initial value
             if ddpg.buffer.size() < hp.REPLAY_INITIAL:
@@ -129,8 +136,9 @@ if __name__ == "__main__":
 
             # Sample a batch and load it as a tensor on device
             batch = ddpg.buffer.sample(hp.BATCH_SIZE)
-            metrics["train/loss_pi"], metrics["train/loss_Q"], alphas, strat_q = ddpg.update(batch)
-            alpha_names = ['move', 'ball_grad', 'energy', 'goal'] 
+            metrics["train/loss_pi"], metrics["train/loss_Q"], alphas, strat_q = ddpg.update(
+                batch)
+            alpha_names = ['move', 'ball_grad', 'energy', 'goal']
             for i, name in enumerate(alpha_names):
                 metrics[f'train/alpha_{name}'] = alphas[i]
                 metrics[f'train/Q_loss_{name}'] = strat_q[i]
@@ -152,7 +160,7 @@ if __name__ == "__main__":
             wandb.log(metrics)
 
             if hp.NOISE_SIGMA_DECAY and sigma_m.value > hp.NOISE_SIGMA_MIN \
-                and n_grads % hp.NOISE_SIGMA_GRAD_STEPS == 0:
+                    and n_grads % hp.NOISE_SIGMA_GRAD_STEPS == 0:
                 # This syntax is needed to be process-safe
                 # The noise sigma value is accessed by the playing processes
                 with sigma_m.get_lock():
@@ -164,7 +172,7 @@ if __name__ == "__main__":
                     metrics={
                         'noise_sigma': sigma_m.value,
                         'n_samples': n_samples,
-                        'n_episodes': n_episodes,   
+                        'n_episodes': n_episodes,
                         'n_grads': n_grads,
                     },
                     pi=ddpg.pi,

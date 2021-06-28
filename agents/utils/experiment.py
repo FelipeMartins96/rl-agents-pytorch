@@ -106,3 +106,12 @@ def save_checkpoint(
     filename = os.path.join(
         hp.CHECKPOINT_PATH, "checkpoint_{:09}.pth".format(metrics['n_grads']))
     torch.save(checkpoint, filename)
+
+
+def load_checkpoint(agent, checkpoint_file_path):
+    checkpoint = torch.load(checkpoint_file_path)
+
+    agent.pi.load_state_dict(checkpoint['pi_state_dict'])
+    agent.Q.load_state_dict(checkpoint['Q_state_dict'])
+    agent.tgt_Q.target_model.load_state_dict(checkpoint['Q_state_dict'])
+    return checkpoint
