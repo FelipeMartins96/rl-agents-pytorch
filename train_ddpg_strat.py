@@ -71,7 +71,6 @@ if __name__ == "__main__":
             target=data_func_strat,
             args=(
                 ddpg,
-                device,
                 exp_queue,
                 finish_event,
                 sigma_m,
