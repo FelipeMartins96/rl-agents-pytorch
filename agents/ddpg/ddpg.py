@@ -83,7 +83,7 @@ def data_func(
                     for i in range(hp.N_AGENTS):
                         ep_rw[i] += r[f'robot_{i}']
                 else:
-                    ep_rw += r
+                    ep_rw = ep_rw + r
 
                 # Trace NStep rewards and add to mp queue
                 if hp.MULTI_AGENT:
@@ -112,7 +112,8 @@ def data_func(
             info['fps'] = ep_steps / (time.perf_counter() - st_time)
             info['noise'] = noise.sigma
             info['ep_steps'] = ep_steps
-            info['ep_rw'] = ep_rw
+            info['ep_rw'] = np.sum(ep_rw)
+            info['rw_strat'] = ep_rw/ep_steps
             queue_m.put(info)
 
 
@@ -292,7 +293,7 @@ class DDPGStratRew(DDPG):
         self.reward_scaling = 1000
 
         self.last_epi_rewards = []
-        self.gamma = hp.GAMMA
+        self.gamma = hp.GAMMA**hp.REWARD_STEPS
         self.buffer = ReplayBuffer(buffer_size=hp.REPLAY_SIZE,
                                    observation_space=hp.observation_space,
                                    action_space=hp.action_space,
