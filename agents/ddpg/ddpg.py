@@ -290,7 +290,7 @@ class DDPGStratRew(DDPG):
 
         self.r_max = torch.Tensor([0.5,  1,  0,  1]).to(self.device)
         self.r_min = torch.Tensor([0.0, -1, -1, -1]).to(self.device)
-        self.reward_scaling = 1000
+        self.reward_scaling = 1
 
         self.last_epi_rewards = []
         self.gamma = hp.GAMMA
@@ -333,8 +333,8 @@ class DDPGStratRew(DDPG):
         # compute alphas
         rew_mean = torch.from_numpy(np.mean(self.last_epi_rewards, 0)).to(self.device)
         dQ = torch.clamp((self.r_max - rew_mean)/(self.r_max - self.r_min), 0, 1)
-        expdQ = torch.exp(dQ)-1
-        rew_alpha = expdQ/(torch.sum(expdQ, 0)+0.0001)
+        rew_alpha = torch.exp(dQ)-1
+        # rew_alpha = expdQ/(torch.sum(expdQ, 0)+0.0001)
 
         # rew_alpha = torch.Tensor([0.333, 0.333, 0.222, 0.111]).to(self.device)
 
