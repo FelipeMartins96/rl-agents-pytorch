@@ -15,6 +15,7 @@ import torch.optim as optim
 
 import wandb
 from agents.ddpg import DDPGStratHP, DDPGStratRew, data_func_strat
+from agents.ddpg.ddpg import data_func
 from agents.utils import (ExperienceFirstLast, ReplayBuffer, save_checkpoint,
                           unpack_batch)
 from agents.utils.experiment import load_checkpoint
@@ -76,9 +77,10 @@ if __name__ == "__main__":
     data_proc_list = []
     for _ in range(hp.N_ROLLOUT_PROCESSES):
         data_proc = mp.Process(
-            target=data_func_strat,
+            target=data_func,
             args=(
                 ddpg,
+                device,
                 exp_queue,
                 finish_event,
                 sigma_m,

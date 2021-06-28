@@ -113,7 +113,7 @@ def data_func(
             info['noise'] = noise.sigma
             info['ep_steps'] = ep_steps
             info['ep_rw'] = np.sum(ep_rw)
-            info['rw_strat'] = ep_rw/ep_steps
+            info['rw_strat'] = ep_rw
             queue_m.put(info)
 
 
@@ -176,7 +176,7 @@ def data_func_strat(
             info['noise'] = noise.sigma
             info['ep_steps'] = ep_steps
             info['ep_rw'] = np.sum(ep_rw)
-            info['rw_strat'] = ep_rw/ep_steps
+            info['rw_strat'] = ep_rw
 
             queue_m.put(info)
 
@@ -295,7 +295,7 @@ class DDPGStratRew(DDPG):
             [-1, -1, -1, -1]).to(self.device)*self.reward_scaling
 
         self.last_epi_rewards = []
-        self.gamma = hp.GAMMA
+        self.gamma = hp.GAMMA**hp.REWARD_STEPS
         self.buffer = ReplayBuffer(buffer_size=hp.REPLAY_SIZE,
                                    observation_space=hp.observation_space,
                                    action_space=hp.action_space,
@@ -339,15 +339,15 @@ class DDPGStratRew(DDPG):
                          (self.r_max - self.r_min), 0, 1)
         dQ = dQ.mean(0)
         expdQ = torch.exp(dQ)-1
-        rew_alpha = expdQ/(torch.sum(expdQ, 0)+0.0001)
-        # rew_alpha = torch.Tensor([0.333, 0.333, 0.222, 0.111]).to(self.device)
+        rew_alpha_dyn = expdQ/(torch.sum(expdQ, 0)+0.0001)
+        rew_alpha = torch.Tensor([0.333, 0.333, 0.222, 0.111]).to(self.device)
 
         pi = self.pi(state_batch)
         Q_values_strat = self.Q(state_batch, pi)
         pi_loss = (Q_values_strat*rew_alpha).sum(1)
         pi_loss = -pi_loss.mean()
 
-        return pi_loss, Q_loss, rew_alpha.cpu().detach().numpy(), Q_loss_strat.cpu().detach().numpy()
+        return pi_loss, Q_loss, rew_alpha_dyn.cpu().detach().numpy(), Q_loss_strat.cpu().detach().numpy()
 
     def update(self, batch):
         pi_loss, Q_loss, alphas, Q_loss_strat = self.loss(batch)
