@@ -331,7 +331,7 @@ class DDPGStratRew(DDPG):
         Q_loss = F.smooth_l1_loss(qf, next_q_value.detach())
 
         # compute alphas
-        rew_mean = torch.from_numpy(np.mean(reward_batch, 0)).to(self.device)
+        rew_mean = reward_batch.mean(0).float()
         dQ = torch.clamp((self.r_max - rew_mean)/(self.r_max - self.r_min), 0, 1)
         expdQ = torch.exp(dQ)-1
         rew_alpha = expdQ/(torch.sum(expdQ, 0)+0.0001)
