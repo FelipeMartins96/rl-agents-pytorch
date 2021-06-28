@@ -13,7 +13,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 import wandb
-from agents.ddpg import (DDPGStratHP, data_func, DDPGStratRew)
+from agents.ddpg import (DDPGStratHP, data_func_strat, DDPGStratRew)
 from agents.utils import ReplayBuffer, save_checkpoint, unpack_batch, ExperienceFirstLast
 import pyvirtualdisplay
 
@@ -68,7 +68,7 @@ if __name__ == "__main__":
     data_proc_list = []
     for _ in range(hp.N_ROLLOUT_PROCESSES):
         data_proc = mp.Process(
-            target=data_func,
+            target=data_func_strat,
             args=(
                 ddpg,
                 device,

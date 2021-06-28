@@ -176,7 +176,7 @@ def data_func_strat(
             info['noise'] = noise.sigma
             info['ep_steps'] = ep_steps
             info['ep_rw'] = np.sum(ep_rw)
-            info['rw_strat'] = ep_rw
+            info['rw_strat'] = ep_rw/ep_steps
 
             queue_m.put(info)
 
@@ -293,7 +293,7 @@ class DDPGStratRew(DDPG):
         self.reward_scaling = 1000
 
         self.last_epi_rewards = []
-        self.gamma = hp.GAMMA**hp.REWARD_STEPS
+        self.gamma = hp.GAMMA
         self.buffer = ReplayBuffer(buffer_size=hp.REPLAY_SIZE,
                                    observation_space=hp.observation_space,
                                    action_space=hp.action_space,
