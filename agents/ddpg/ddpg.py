@@ -288,7 +288,7 @@ class DDPGStratRew(DDPG):
         self.pi_opt = Adam(self.pi.parameters(), lr=hp.LEARNING_RATE)
         self.Q_opt = Adam(self.Q.parameters(), lr=hp.LEARNING_RATE)
 
-        self.reward_scaling = 1000
+        self.reward_scaling = 1
         self.r_max = torch.Tensor([1,  1,  0,  1]).to(
             self.device)*self.reward_scaling
         self.r_min = torch.Tensor(
@@ -340,7 +340,7 @@ class DDPGStratRew(DDPG):
         dQ = dQ.mean(0)
         expdQ = torch.exp(dQ)-1
         rew_alpha_dyn = expdQ/(torch.sum(expdQ, 0)+0.0001)
-        rew_alpha = torch.Tensor([0.333, 0.333, 0.222, 0.111]).to(self.device)
+        rew_alpha = torch.Tensor([0.306, 0.564, 0.049, 0.081]).to(self.device)
 
         pi = self.pi(state_batch)
         Q_values_strat = self.Q(state_batch, pi)
