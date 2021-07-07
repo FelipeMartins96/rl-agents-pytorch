@@ -318,11 +318,12 @@ class DDPGStratRew(DDPG):
         mask_batch = batch.dones.bool().squeeze()
         next_state_batch = batch.next_observations
 
+        rew_alpha = torch.Tensor([0.306, 0.564, 0.049, 0.081]).to(self.device)
         next_state_action = self.tgt_pi(next_state_batch)
         qf_next_target = self.tgt_Q(next_state_batch, next_state_action)
         qf_next_target[mask_batch] = 0.0
-        next_q_value = reward_batch + self.gamma * qf_next_target
-        qf = self.Q(state_batch, action_batch)
+        next_q_value = (reward_batch + self.gamma * qf_next_target)*rew_alpha
+        qf = self.Q(state_batch, action_batch)*rew_alpha
 
         # Compute per component loss:
         Q_loss_strat = torch.Tensor([0.0, 0.0, 0.0, 0.0]).to(self.device)
@@ -340,7 +341,6 @@ class DDPGStratRew(DDPG):
         dQ = dQ.mean(0)
         expdQ = torch.exp(dQ)-1
         rew_alpha_dyn = expdQ/(torch.sum(expdQ, 0)+0.0001)
-        rew_alpha = torch.Tensor([0.306, 0.564, 0.049, 0.081]).to(self.device)
 
         pi = self.pi(state_batch)
         Q_values_strat = self.Q(state_batch, pi)
