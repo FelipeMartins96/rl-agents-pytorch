@@ -79,6 +79,7 @@ def data_func(
                 a = noise(a)
                 s_next, r, done, info = env.step(a)
                 ep_steps += 1
+                r = r*env.weights
                 if hp.MULTI_AGENT:
                     for i in range(hp.N_AGENTS):
                         ep_rw[i] += r[f'robot_{i}']
@@ -115,71 +116,6 @@ def data_func(
             info['ep_rw'] = np.sum(ep_rw)
             info['rw_strat'] = ep_rw
             queue_m.put(info)
-
-
-def data_func_strat(
-    pi,
-    queue_m,
-    finish_event_m,
-    sigma_m,
-    gif_req_m,
-    hp
-):
-    env = gym.make(hp.ENV_NAME)
-    noise = OrnsteinUhlenbeckNoise(
-        sigma=sigma_m.value,
-        theta=hp.NOISE_THETA,
-        min_value=env.action_space.low,
-        max_value=env.action_space.high
-    )
-
-    with torch.no_grad():
-        while not finish_event_m.is_set():
-            # Check for generate gif request
-            gif_idx = -1
-            with gif_req_m.get_lock():
-                if gif_req_m.value != -1:
-                    gif_idx = gif_req_m.value
-                    gif_req_m.value = -1
-            if gif_idx != -1:
-                path = os.path.join(hp.GIF_PATH, f"{gif_idx:09d}.gif")
-                generate_gif(env=env, filepath=path,
-                             pi=copy.deepcopy(pi), hp=hp)
-
-            done = False
-            s = env.reset()
-            noise.reset()
-            noise.sigma = sigma_m.value
-            info = {}
-            ep_steps = 0
-            ep_rw = np.array([0]*hp.N_REWS)
-            st_time = time.perf_counter()
-            for i in range(hp.MAX_EPISODE_STEPS):
-                # Step the environment
-                a = pi.get_action(s)
-                a = noise(a)
-                s_next, r, done, info = env.step(a)
-                ep_steps += 1
-                ep_rw = ep_rw + r
-
-                s_next = s_next if not done else None
-                # Trace NStep rewards and add to mp queue
-                exp = ExperienceFirstLast(s, a, r, s_next)
-                queue_m.put(exp)
-
-                if done:
-                    break
-
-                # Set state for next step
-                s = s_next
-            info['fps'] = ep_steps / (time.perf_counter() - st_time)
-            info['noise'] = noise.sigma
-            info['ep_steps'] = ep_steps
-            info['ep_rw'] = np.sum(ep_rw)
-            info['rw_strat'] = ep_rw
-
-            queue_m.put(info)
-
 
 class DDPG:
 
@@ -318,21 +254,20 @@ class DDPGStratRew(DDPG):
         mask_batch = batch.dones.bool().squeeze()
         next_state_batch = batch.next_observations
 
-        rew_alpha = torch.Tensor([0.306, 0.564, 0.049, 0.081]).to(self.device)
         next_state_action = self.tgt_pi(next_state_batch)
         qf_next_target = self.tgt_Q(next_state_batch, next_state_action)
         qf_next_target[mask_batch] = 0.0
-        next_q_value = (reward_batch + self.gamma * qf_next_target)*rew_alpha
-        qf = self.Q(state_batch, action_batch)*rew_alpha
+        next_q_value = reward_batch + self.gamma * qf_next_target
+        qf = self.Q(state_batch, action_batch)
 
         # Compute per component loss:
         Q_loss_strat = torch.Tensor([0.0, 0.0, 0.0, 0.0]).to(self.device)
         for i in range(qf.shape[1]):
-            Q_loss_strat[i] = F.smooth_l1_loss(
+            Q_loss_strat[i] = F.mse_loss(
                 qf[:, i], next_q_value[:, i].detach())
 
         # Q_loss = F.mse_loss(qf, next_q_value.detach())
-        Q_loss = F.smooth_l1_loss(qf, next_q_value.detach())
+        Q_loss = F.mse_loss(qf, next_q_value.detach())
 
         # compute alphas
         rew_mean = torch.Tensor(self.last_epi_rewards).to(self.device)
@@ -344,7 +279,7 @@ class DDPGStratRew(DDPG):
 
         pi = self.pi(state_batch)
         Q_values_strat = self.Q(state_batch, pi)
-        pi_loss = (Q_values_strat*rew_alpha).sum(1)
+        pi_loss = Q_values_strat.sum(1)
         pi_loss = -pi_loss.mean()
 
         return pi_loss, Q_loss, rew_alpha_dyn.cpu().detach().numpy(), Q_loss_strat.cpu().detach().numpy()

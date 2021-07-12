@@ -14,7 +14,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 import wandb
-from agents.ddpg import DDPGStratHP, DDPGStratRew, data_func_strat
+from agents.ddpg import DDPGStratHP, DDPGStratRew
 from agents.ddpg.ddpg import data_func
 from agents.utils import (ExperienceFirstLast, ReplayBuffer, save_checkpoint,
                           unpack_batch)
@@ -53,7 +53,7 @@ if __name__ == "__main__":
         NOISE_SIGMA_GRAD_STEPS=3000,
         REPLAY_SIZE=1000000,
         REPLAY_INITIAL=100000,
-        SAVE_FREQUENCY=100000,
+        SAVE_FREQUENCY=10000,
         GIF_FREQUENCY=10000,
         TOTAL_GRAD_STEPS=2000000.
     )
