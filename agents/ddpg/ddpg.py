@@ -79,7 +79,6 @@ def data_func(
                 a = noise(a)
                 s_next, r, done, info = env.step(a)
                 ep_steps += 1
-                r = r*env.weights
                 if hp.MULTI_AGENT:
                     for i in range(hp.N_AGENTS):
                         ep_rw[i] += r[f'robot_{i}']
@@ -141,9 +140,10 @@ class DDPG:
         self.Q.share_memory()
 
     def loss(self, batch):
+        alphas = torch.Tensor([0.306, 0.564, 0.049, 0.081]).to(self.device)
         state_batch = batch.observations
         action_batch = batch.actions
-        reward_batch = batch.rewards
+        reward_batch = (batch.rewards*alphas).sum(1)
         mask_batch = batch.dones.bool()
         next_state_batch = batch.next_observations
 
@@ -248,9 +248,10 @@ class DDPGStratRew(DDPG):
             self.last_epi_rewards.append(rewards)
 
     def loss(self, batch):
+        alphas = torch.Tensor([0.306, 0.564, 0.049, 0.081]).to(self.device)
         state_batch = batch.observations
         action_batch = batch.actions
-        reward_batch = self.reward_scaling*batch.rewards
+        reward_batch = self.reward_scaling*batch.rewards*alphas
         mask_batch = batch.dones.bool().squeeze()
         next_state_batch = batch.next_observations
 
