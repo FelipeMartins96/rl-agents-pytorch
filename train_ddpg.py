@@ -46,11 +46,11 @@ if __name__ == "__main__":
         NOISE_SIGMA_DECAY=0.99,
         NOISE_SIGMA_MIN=0.15,
         NOISE_SIGMA_GRAD_STEPS=3000,
-        REPLAY_SIZE=5000000,
+        REPLAY_SIZE=1000000,
         REPLAY_INITIAL=100000,
-        SAVE_FREQUENCY=100000,
-        GIF_FREQUENCY=100000,
-        TOTAL_GRAD_STEPS=2000000
+        SAVE_FREQUENCY=10000,
+        GIF_FREQUENCY=10000,
+        TOTAL_GRAD_STEPS=1000000
     )
     wandb.init(project='RoboCIn-RL', name=hp.EXP_NAME,  entity='robocin', config=hp.to_dict())
     current_time = datetime.datetime.now().strftime('%b-%d_%H-%M-%S')
@@ -86,7 +86,8 @@ if __name__ == "__main__":
     buffer = ReplayBuffer(buffer_size=hp.REPLAY_SIZE,
                           observation_space=hp.observation_space,
                           action_space=hp.action_space,
-                          device=hp.DEVICE
+                          device=hp.DEVICE,
+                          strat_size=4
                           )
     n_grads = 0
     n_samples = 0

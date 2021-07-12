@@ -116,6 +116,7 @@ def data_func(
             info['rw_strat'] = ep_rw
             queue_m.put(info)
 
+
 class DDPG:
 
     def __init__(self, hp):
@@ -143,7 +144,7 @@ class DDPG:
         alphas = torch.Tensor([0.306, 0.564, 0.049, 0.081]).to(self.device)
         state_batch = batch.observations
         action_batch = batch.actions
-        reward_batch = (batch.rewards*alphas).sum(1)
+        reward_batch = (batch.rewards*alphas).sum(1).unsqueeze(1)
         mask_batch = batch.dones.bool()
         next_state_batch = batch.next_observations
 
