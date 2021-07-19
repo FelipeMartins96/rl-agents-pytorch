@@ -86,8 +86,7 @@ if __name__ == "__main__":
     buffer = ReplayBuffer(buffer_size=hp.REPLAY_SIZE,
                           observation_space=hp.observation_space,
                           action_space=hp.action_space,
-                          device=hp.DEVICE,
-                          strat_size=4
+                          device=hp.DEVICE
                           )
     n_grads = 0
     n_samples = 0

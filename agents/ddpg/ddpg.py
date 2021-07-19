@@ -78,6 +78,7 @@ def data_func(
                 a = pi.get_action(s)
                 a = noise(a)
                 s_next, r, done, info = env.step(a)
+                r = np.sum(r*hp.REW_ALPHA)
                 ep_steps += 1
                 if hp.MULTI_AGENT:
                     for i in range(hp.N_AGENTS):
@@ -141,10 +142,9 @@ class DDPG:
         self.Q.share_memory()
 
     def loss(self, batch):
-        alphas = torch.Tensor([0.2, 0.75, 0.05, 10]).to(self.device)
         state_batch = batch.observations
         action_batch = batch.actions
-        reward_batch = (batch.rewards*alphas).sum(1).unsqueeze(1)
+        reward_batch = batch.rewards
         mask_batch = batch.dones.bool()
         next_state_batch = batch.next_observations
 
