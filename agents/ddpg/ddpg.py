@@ -141,7 +141,7 @@ class DDPG:
         self.Q.share_memory()
 
     def loss(self, batch):
-        alphas = torch.Tensor([0.5, 0.4, 0.02, 0.08]).to(self.device)
+        alphas = torch.Tensor([0.2, 0.75, 0.05, 10]).to(self.device)
         state_batch = batch.observations
         action_batch = batch.actions
         reward_batch = (batch.rewards*alphas).sum(1).unsqueeze(1)
@@ -249,7 +249,7 @@ class DDPGStratRew(DDPG):
             self.last_epi_rewards.append(rewards)
 
     def loss(self, batch):
-        alphas = torch.Tensor([0.5, 0.4, 0.02, 0.08]).to(self.device)
+        alphas = torch.Tensor([0.2, 0.75, 0.05, 10]).to(self.device)
         state_batch = batch.observations
         action_batch = batch.actions
         reward_batch = self.reward_scaling*batch.rewards*alphas
