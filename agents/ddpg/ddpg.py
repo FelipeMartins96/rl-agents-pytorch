@@ -232,7 +232,7 @@ class DDPGStratRew(DDPG):
             [-1, -1, -1, -1]).to(self.device)*self.reward_scaling
 
         self.last_epi_rewards = []
-        self.gamma = hp.GAMMA**hp.REWARD_STEPS
+        self.gamma = hp.GAMMA
         self.buffer = ReplayBuffer(buffer_size=hp.REPLAY_SIZE,
                                    observation_space=hp.observation_space,
                                    action_space=hp.action_space,
@@ -249,7 +249,7 @@ class DDPGStratRew(DDPG):
             self.last_epi_rewards.append(rewards)
 
     def loss(self, batch):
-        alphas = torch.Tensor([0.2, 0.75, 0.05, 10]).to(self.device)
+        alphas = torch.Tensor([0.418, 0.356, 0.118, 0.108]).to(self.device)
         state_batch = batch.observations
         action_batch = batch.actions
         reward_batch = self.reward_scaling*batch.rewards*alphas
