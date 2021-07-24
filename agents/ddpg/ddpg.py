@@ -252,7 +252,7 @@ class DDPGStratRew(DDPG):
         alphas = torch.Tensor([0.418, 0.356, 0.118, 0.108]).to(self.device)
         state_batch = batch.observations
         action_batch = batch.actions
-        reward_batch = self.reward_scaling*batch.rewards*alphas
+        reward_batch = self.reward_scaling*batch.rewards
         mask_batch = batch.dones.bool().squeeze()
         next_state_batch = batch.next_observations
 
@@ -280,7 +280,7 @@ class DDPGStratRew(DDPG):
         rew_alpha_dyn = expdQ/(torch.sum(expdQ, 0)+0.0001)
 
         pi = self.pi(state_batch)
-        Q_values_strat = self.Q(state_batch, pi)
+        Q_values_strat = self.Q(state_batch, pi)*alphas
         pi_loss = Q_values_strat.sum(1)
         pi_loss = -pi_loss.mean()
 
