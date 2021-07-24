@@ -270,20 +270,20 @@ class DDPGStratRew(DDPG):
         # Q_loss = F.mse_loss(qf, next_q_value.detach())
         Q_loss = F.mse_loss(qf, next_q_value.detach())
 
-        # # compute alphas
-        # rew_mean = torch.Tensor(self.last_epi_rewards).to(self.device)
-        # dQ = torch.clamp((self.r_max - rew_mean) /
-        #                  (self.r_max - self.r_min), 0, 1)
-        # dQ = dQ.mean(0)
-        # expdQ = torch.exp(dQ)-1
-        # rew_alpha_dyn = expdQ/(torch.sum(expdQ, 0)+0.0001)
+        # compute alphas
+        rew_mean = torch.Tensor(self.last_epi_rewards).to(self.device)
+        dQ = torch.clamp((self.r_max - rew_mean) /
+                         (self.r_max - self.r_min), 0, 1)
+        dQ = dQ.mean(0)
+        expdQ = torch.exp(dQ)-1
+        rew_alpha_dyn = expdQ/(torch.sum(expdQ, 0)+0.0001)
 
         pi = self.pi(state_batch)
         Q_values_strat = self.Q(state_batch, pi)*alphas
         pi_loss = Q_values_strat.sum(1)
         pi_loss = -pi_loss.mean()
 
-        return pi_loss, Q_loss, alphas.cpu().detach().numpy(), Q_loss_strat.cpu().detach().numpy()
+        return pi_loss, Q_loss, rew_alpha_dyn.cpu().detach().numpy(), Q_loss_strat.cpu().detach().numpy()
 
     def update(self, batch):
         pi_loss, Q_loss, alphas, Q_loss_strat = self.loss(batch)
