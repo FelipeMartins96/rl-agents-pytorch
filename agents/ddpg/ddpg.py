@@ -78,7 +78,6 @@ def data_func(
                 a = pi.get_action(s)
                 a = noise(a)
                 s_next, r, done, info = env.step(a)
-                r = np.sum(r*env.weights)
                 ep_steps += 1
                 if hp.MULTI_AGENT:
                     for i in range(hp.N_AGENTS):
