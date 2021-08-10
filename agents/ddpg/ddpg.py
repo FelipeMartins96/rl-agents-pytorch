@@ -205,7 +205,7 @@ class DDPGStratHP(DDPGHP):
             self.action_space.shape = (env.action_space.shape[1], )
             self.observation_space.shape = (env.observation_space.shape[1], )
         self.N_REWS = len(env.weights)
-        self.REW_ALPHA = torch.Tensor([0.15, 0.3, 0.05, 0.5]).to(self.device)
+        self.REW_ALPHA = torch.Tensor([0.15, 0.3, 0.05, 0.5])
 
 
 class DDPGStratRew(DDPG):
@@ -245,7 +245,7 @@ class DDPGStratRew(DDPG):
             self.last_epi_rewards.append(rewards)
 
     def loss(self, batch):
-        alphas = self.hp.REW_ALPHA
+        alphas = self.hp.REW_ALPHA.to(self.device)
         state_batch = batch.observations
         action_batch = batch.actions
         reward_batch = self.reward_scaling*batch.rewards
