@@ -34,10 +34,6 @@ def data_func(
     hp
 ):
     env = gym.make(hp.ENV_NAME)
-    if hp.MULTI_AGENT:
-        tracer = [NStepTracer(n=hp.REWARD_STEPS, gamma=hp.GAMMA)]*hp.N_AGENTS
-    else:
-        tracer = NStepTracer(n=hp.REWARD_STEPS, gamma=hp.GAMMA)
     noise = OrnsteinUhlenbeckNoise(
         sigma=sigma_m.value,
         theta=hp.NOISE_THETA,
@@ -61,10 +57,6 @@ def data_func(
             done = False
             s = env.reset()
             noise.reset()
-            if hp.MULTI_AGENT:
-                [tracer[i].reset() for i in range(hp.N_AGENTS)]
-            else:
-                tracer.reset()
             noise.sigma = sigma_m.value
             info = {}
             ep_steps = 0
@@ -99,9 +91,14 @@ def data_func(
                         exp.append(ExperienceFirstLast(**kwargs))
                     queue_m.put(exp)
                 else:
-                    tracer.add(s, a, r, done)
-                    while tracer:
-                        queue_m.put(tracer.pop())
+                    s_next = s_next if not done else None
+                    kwargs = {
+                        'state': s,
+                        'action': a,
+                        'reward': r,
+                        'last_state': s_next
+                    }
+                    queue_m.put(ExperienceFirstLast(**kwargs))
 
                 if done:
                     break
@@ -208,7 +205,7 @@ class DDPGStratHP(DDPGHP):
             self.action_space.shape = (env.action_space.shape[1], )
             self.observation_space.shape = (env.observation_space.shape[1], )
         self.N_REWS = len(env.weights)
-        self.REW_ALPHA = env.weights
+        self.REW_ALPHA = torch.Tensor([0.15, 0.3, 0.05, 0.5]).to(self.device)
 
 
 class DDPGStratRew(DDPG):
@@ -248,7 +245,7 @@ class DDPGStratRew(DDPG):
             self.last_epi_rewards.append(rewards)
 
     def loss(self, batch):
-        alphas = torch.Tensor([0.418, 0.356, 0.118, 0.108]).to(self.device)
+        alphas = self.hp.REW_ALPHA
         state_batch = batch.observations
         action_batch = batch.actions
         reward_batch = self.reward_scaling*batch.rewards
