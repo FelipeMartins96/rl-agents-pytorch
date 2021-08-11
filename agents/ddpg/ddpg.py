@@ -205,7 +205,7 @@ class DDPGStratHP(DDPGHP):
             self.action_space.shape = (env.action_space.shape[1], )
             self.observation_space.shape = (env.observation_space.shape[1], )
         self.N_REWS = len(env.weights)
-        self.REW_ALPHA = torch.Tensor([0.15, 0.3, 0.05, 0.5])
+        self.REW_ALPHA = torch.Tensor([0.3, 0.3, 0.1, 0.3])
 
 
 class DDPGStratRew(DDPG):
