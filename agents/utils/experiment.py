@@ -39,10 +39,10 @@ class HyperParameters:
         env = gym.make(self.ENV_NAME)
         self.N_OBS, self.N_ACTS, self.MAX_EPISODE_STEPS = env.observation_space.shape[
             0], env.action_space.shape[0], env.spec.max_episode_steps
-        if self.MULTI_AGENT:
-            self.N_AGENTS = env.action_space.shape[0]
-            self.N_ACTS = env.action_space.shape[1]
-            self.N_OBS = env.observation_space.shape[1]
+        # if self.MULTI_AGENT:
+        #     self.N_AGENTS = env.action_space.shape[0]
+        #     self.N_ACTS = env.action_space.shape[1]
+        #     self.N_OBS = env.observation_space.shape[1]
         self.SAVE_PATH = os.path.join(
             "saves", self.ENV_NAME, self.AGENT, self.EXP_NAME)
         self.CHECKPOINT_PATH = os.path.join(self.SAVE_PATH, "checkpoints")
@@ -51,9 +51,9 @@ class HyperParameters:
         os.makedirs(self.GIF_PATH, exist_ok=True)
         self.action_space = env.action_space
         self.observation_space = env.observation_space
-        if self.MULTI_AGENT:
-            self.action_space.shape = (env.action_space.shape[1], )
-            self.observation_space.shape = (env.observation_space.shape[1], )
+        # if self.MULTI_AGENT:
+            # self.action_space.shape = (env.action_space.shape[1], )
+            # self.observation_space.shape = (env.observation_space.shape[1], )
 
 
 def unpack_batch(

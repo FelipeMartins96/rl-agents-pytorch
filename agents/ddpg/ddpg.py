@@ -42,16 +42,6 @@ def data_func(
 
     with torch.no_grad():
         while not finish_event_m.is_set():
-            # Check for generate gif request
-            gif_idx = -1
-            with gif_req_m.get_lock():
-                if gif_req_m.value != -1:
-                    gif_idx = gif_req_m.value
-                    gif_req_m.value = -1
-            if gif_idx != -1:
-                path = os.path.join(hp.GIF_PATH, f"{gif_idx:09d}.gif")
-                generate_gif(env=env, filepath=path,
-                             pi=copy.deepcopy(pi), hp=hp)
 
             done = False
             s = env.reset()
@@ -78,7 +68,7 @@ def data_func(
                 ep_steps += 1
                 if hp.MULTI_AGENT:
                     for i in range(hp.N_AGENTS):
-                        ep_rw[i] += r[f'robot_{i}']
+                        ep_rw[i] += r[i]
                 else:
                     ep_rw += r
 
@@ -86,14 +76,9 @@ def data_func(
                 if hp.MULTI_AGENT: 
                     exp = list()
                     for i in range(hp.N_AGENTS):
-                        kwargs = {
-                            'state': s[i],
-                            'action': a[i],
-                            'reward': r[f'robot_{i}'],
-                            'last_state': s_next[i]
-                        }
-                        exp.append(ExperienceFirstLast(**kwargs))
-                    queue_m.put(exp)
+                        tracer[i].add(s[i], a[i], r[i], done)
+                        while tracer[i]:
+                            queue_m.put(tracer[i].pop())
                 else:
                     tracer.add(s, a, r, done)
                     while tracer:
@@ -108,5 +93,6 @@ def data_func(
             info['fps'] = ep_steps / (time.perf_counter() - st_time)
             info['noise'] = noise.sigma
             info['ep_steps'] = ep_steps
-            info['ep_rw'] = ep_rw
+            info['ep_rw_1'] = ep_rw[0]
+            info['ep_rw_2'] = ep_rw[1]
             queue_m.put(info)
