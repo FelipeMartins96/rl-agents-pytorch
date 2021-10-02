@@ -42,19 +42,19 @@ if __name__ == "__main__":
         EXP_NAME=args.name,
         DEVICE=device,
         ENV_NAME=args.env,
-        N_ROLLOUT_PROCESSES=1,
+        N_ROLLOUT_PROCESSES=3,
         LEARNING_RATE=0.0001 / 10,
         EXP_GRAD_RATIO=10,
         BATCH_SIZE=256,
         GAMMA=0.95,
         REWARD_STEPS=3,
-        NOISE_SIGMA_INITIAL=0.8,
+        NOISE_SIGMA_INITIAL=0.15,
         NOISE_THETA=0.15,
         NOISE_SIGMA_DECAY=0.99,
         NOISE_SIGMA_MIN=0.15,
-        NOISE_SIGMA_GRAD_STEPS=3000,
+        NOISE_SIGMA_GRAD_STEPS=3000000000,
         REPLAY_SIZE=5000000,
-        REPLAY_INITIAL=3000,
+        REPLAY_INITIAL=300000,
         SAVE_FREQUENCY=100000,
         GIF_FREQUENCY=25000,
         TOTAL_GRAD_STEPS=2000000,
@@ -193,9 +193,40 @@ if __name__ == "__main__":
                 tgt_pi.sync(alpha=1 - 1e-3)
                 tgt_Q.sync(alpha=1 - 1e-3)
 
+
                 n_grads += 1
                 grad_time = time.perf_counter()
                 if n_grads % 100 == 0:
+                    if n_grads % 50000 == 0:
+                        val_steps = []
+                        val_rw_1 = []
+                        val_rw_2 = []
+                        val_infos = []
+                        for i in range(5):
+                            done = False
+                            s = val_env.reset()
+                            ep_steps = 0
+                            ep_rw_1 = 0
+                            ep_rw_2 = 0
+                            while not done:
+                                s_v = torch.Tensor(s).to(device)
+                                a_v = pi(s_v)
+                                a = a_v.cpu().numpy()
+                                s_next, r, done, info = val_env.step(a)
+                                ep_steps += 1
+                                ep_rw_1 += r[0]
+                                ep_rw_2 += r[1]
+                            
+                            val_steps.append(ep_steps)
+                            val_rw_1.append(ep_rw_1)
+                            val_rw_2.append(ep_rw_2)
+                            val_infos.append(info)
+                        
+                        metrics["validation/steps"] = np.mean(val_steps)
+                        metrics["validation/reward_1"] = np.mean(val_rw_1)
+                        metrics["validation/reward_2"] = np.mean(val_rw_2)
+                        for key in val_infos[0].keys():
+                            metrics[f"validation/{key}"] = np.mean([info[key] for info in ep_infos])
                     metrics['speed/samples'] = new_samples/(sample_time - st_time)
                     metrics['speed/grad'] = 1/(grad_time - sample_time)
                     metrics['speed/total'] = 1/(grad_time - st_time)
@@ -240,9 +271,7 @@ if __name__ == "__main__":
                         Q_opt=Q_opt
                     )
 
-                if hp.GIF_FREQUENCY and n_grads % hp.GIF_FREQUENCY == 0:
-                    gif_req_m.value = n_grads
-                    wandb_gif_queue.append(os.path.join(hp.GIF_PATH, f"{n_grads:09d}.gif"))
+
 
     except KeyboardInterrupt:
         print("...Finishing...")

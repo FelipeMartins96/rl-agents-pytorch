@@ -58,7 +58,7 @@ def data_func(
             else:
                 ep_rw = 0
             st_time = time.perf_counter()
-            for i in range(hp.MAX_EPISODE_STEPS):
+            for i in range(hp.MAX_EPISODE_STEPS-1):
                 # Step the environment
                 s_v = torch.Tensor(s).to(device)
                 a_v = pi(s_v)
