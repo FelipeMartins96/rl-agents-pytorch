@@ -287,7 +287,7 @@ class DDPGStratRew(DDPG):
         self.Q_opt = Adam(self.Q.parameters(), lr=hp.LEARNING_RATE)
 
         self.rew_alpha = torch.Tensor(hp.REW_ALPHA).to(self.device)
-        self.gamma = hp.GAMMA
+        self.gamma = hp.GAMMA**hp.REWARD_STEPS
 
     def loss(self, batch):
         state_batch = batch.observations
