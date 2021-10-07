@@ -39,24 +39,24 @@ if __name__ == "__main__":
         EXP_NAME=args.name,
         DEVICE=device,
         ENV_NAME=args.env,
-        N_ROLLOUT_PROCESSES=1, # enviroments number  
+        N_ROLLOUT_PROCESSES=3, # enviroments number  
         LEARNING_RATE=0.0001,
         EXP_GRAD_RATIO=10, # 10 passos no ambiente add no buffer e depois interage, para um passo do gradiente
         BATCH_SIZE=256,
-        GAMMA=0.95,  # 
+        GAMMA=0.99,  # 
         REWARD_STEPS=3, # n-steps, somar o reward de n steps 
         NOISE_SIGMA_INITIAL=0.8, 
         NOISE_THETA=0.15,
-        NOISE_SIGMA_DECAY=0.99,
+        NOISE_SIGMA_DECAY=0.999,
         NOISE_SIGMA_MIN=0.15,
         NOISE_SIGMA_GRAD_STEPS=3000,
         REPLAY_SIZE=200000, # memoria , buffer 
         REPLAY_INITIAL=5000, # depois de n tempo começa a treinar
         SAVE_FREQUENCY=20000, # a cada quantos passos ele vai salvar os checkpoints
         GIF_FREQUENCY=10000, # depois de n passos cria um gif.
-        TOTAL_GRAD_STEPS=2000000
+        TOTAL_GRAD_STEPS=5000000
     )
-    wandb.init(project='RoboCIn-RL', name=hp.EXP_NAME,  entity='robocin', config=hp.to_dict())
+    wandb.init(project='tg-juliana', name=hp.EXP_NAME,  entity='robocin', config=hp.to_dict())
     current_time = datetime.datetime.now().strftime('%b-%d_%H-%M-%S')
     tb_path = os.path.join('runs', current_time + '_'
                            + hp.ENV_NAME + '_' + hp.EXP_NAME)
