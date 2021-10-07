@@ -34,7 +34,7 @@ import pyvirtualdisplay
 
 if __name__ == "__main__":
     # Creates a virtual display for OpenAI gym
-    # pyvirtualdisplay.Display(visible=0, size=(1400, 900)).start()
+    pyvirtualdisplay.Display(visible=0, size=(1400, 900)).start()
 
     mp.set_start_method("spawn")
     os.environ["OMP_NUM_THREADS"] = "1"
@@ -60,11 +60,11 @@ if __name__ == "__main__":
         BATCH_SIZE=256,
         GAMMA=0.95,
         REWARD_STEPS=3,
-        NOISE_SIGMA_INITIAL=0.15,
+        NOISE_SIGMA_INITIAL=0.6,
         NOISE_THETA=0.15,
-        NOISE_SIGMA_DECAY=0.99,
+        NOISE_SIGMA_DECAY=0.997,
         NOISE_SIGMA_MIN=0.15,
-        NOISE_SIGMA_GRAD_STEPS=3000000000,
+        NOISE_SIGMA_GRAD_STEPS=3000,
         REPLAY_SIZE=5000000,
         REPLAY_INITIAL=200000,
         SAVE_FREQUENCY=100000,
@@ -91,8 +91,8 @@ if __name__ == "__main__":
     Q = DDPGCritic(40, 2).to(device)
 
     checkpoint = torch.load("atk.pth", map_location=device)
-    pi.load_state_dict(checkpoint["state_dict_act"])
-    Q.load_state_dict(checkpoint["state_dict_crt"])
+    pi.load_state_dict(checkpoint["pi_state_dict"])
+    Q.load_state_dict(checkpoint["Q_state_dict"])
 
     # Playing
     pi.share_memory()
