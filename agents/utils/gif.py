@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import PIL
 import os
+import wandb
 
 def generate_gif(
     env, 
@@ -53,6 +54,9 @@ def generate_gif(
 
         s = s_next
 
+
+
+
     # store last frame
     frame = env.render(mode='rgb_array')
     frame = PIL.Image.fromarray(frame)
@@ -60,6 +64,8 @@ def generate_gif(
     if resize_to is not None:
         frame = frame.resize(resize_to)
     frames.append(frame)
+
+    wandb.log({"video": wandb.Video(frames, fps=4, format="gif")})
 
     # generate gif
     frames[0].save(
@@ -70,3 +76,5 @@ def generate_gif(
         duration=duration, 
         loop=0
     )
+
+    return info
