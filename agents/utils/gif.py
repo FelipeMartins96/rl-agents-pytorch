@@ -77,6 +77,8 @@ def generate_gif(
         loop=0
     )
 
-    wandb.log({"video": wandb.Video(filepath, fps=4, format="gif")})
+    wandb.init(project='tg-juliana', name=hp.EXP_NAME,  entity='robocin', config=hp.to_dict())
+
+    wandb.log({"video": wandb.Video(filepathz, fps=4, format="gif")})
 
     return info
