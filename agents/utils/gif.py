@@ -65,9 +65,11 @@ def generate_gif(
         frame = frame.resize(resize_to)
     frames.append(frame)
 
-    wandb.log({"video": wandb.Video(frames, fps=4, format="gif")})
+    wandb.log({"video": wandb.Video( np.array(frames), fps=4, format="gif")})
 
-    # generate gif
+    return info
+    
+"""     # generate gif
     frames[0].save(
         fp=filepath, 
         format='GIF', 
@@ -75,6 +77,6 @@ def generate_gif(
         save_all=True,
         duration=duration, 
         loop=0
-    )
+    ) """
 
-    return info
+    
