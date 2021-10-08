@@ -28,6 +28,7 @@ def generate_gif(
     
     # collect frames
     frames = []
+    frames_array = []
     s = env.reset()
     for t in range(max_episode_steps):
         if hp.AGENT != "maddpg_async":
@@ -59,13 +60,14 @@ def generate_gif(
 
     # store last frame
     frame = env.render(mode='rgb_array')
+    frames_array.append(frame)
     frame = PIL.Image.fromarray(frame)
     frame = frame.convert('P', palette=PIL.Image.ADAPTIVE)
     if resize_to is not None:
         frame = frame.resize(resize_to)
     frames.append(frame)
 
-    wandb.log({"video": wandb.Video( np.array(frames), fps=4, format="gif")})
+    wandb.log({"video": wandb.Video( (frames_array), fps=4, format="gif")})
 
     return info
     
