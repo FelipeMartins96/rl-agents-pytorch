@@ -58,7 +58,7 @@ if __name__ == "__main__":
         GIF_FREQUENCY=25000,
         TOTAL_GRAD_STEPS=2000000
     )
-    wandb.init(project='5v5', name=hp.EXP_NAME,  entity='robocin', config=hp.to_dict())
+    wandb.init(project='larc_2021', name=hp.EXP_NAME,  entity='robocin', config=hp.to_dict())
     current_time = datetime.datetime.now().strftime('%b-%d_%H-%M-%S')
     tb_path = os.path.join('runs', current_time + '_'
                            + hp.ENV_NAME + '_' + hp.EXP_NAME)
@@ -106,7 +106,7 @@ if __name__ == "__main__":
     last_gif = None
     wandb_gif_queue = deque()
     try:
-        with tqdm(total=hp.TOTAL_GRAD_STEPS) as pbar:
+        with tqdm(total=hp.TOTAL_GRAD_STEPS, smoothing=0) as pbar:
             ep_infos = list()
             while n_grads < hp.TOTAL_GRAD_STEPS:
                 metrics = {}
@@ -178,8 +178,9 @@ if __name__ == "__main__":
                 tgt_Q.sync(alpha=1 - 1e-3)
 
                 n_grads += 1
+                pbar.update(1)
                 grad_time = time.perf_counter()
-                if n_grads % 10 == 0:
+                if n_grads % 100 == 0:
                     metrics['speed/samples'] = new_samples/(sample_time - st_time)
                     metrics['speed/grad'] = 1/(grad_time - sample_time)
                     metrics['speed/total'] = 1/(grad_time - st_time)
@@ -193,7 +194,6 @@ if __name__ == "__main__":
                             metrics[key] = np.mean([info[key] for info in ep_infos])
                     ep_infos = list()
                     
-                    pbar.update(10)
 
                     if len(wandb_gif_queue):
                         if os.path.isfile(wandb_gif_queue[0]):
