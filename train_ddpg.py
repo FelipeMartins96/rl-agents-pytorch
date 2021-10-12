@@ -56,7 +56,7 @@ if __name__ == "__main__":
         REPLAY_INITIAL=100000,
         SAVE_FREQUENCY=100000,
         GIF_FREQUENCY=25000,
-        TOTAL_GRAD_STEPS=2000000
+        TOTAL_GRAD_STEPS=1000000
     )
     wandb.init(project='larc_2021', name=hp.EXP_NAME,  entity='robocin', config=hp.to_dict())
     current_time = datetime.datetime.now().strftime('%b-%d_%H-%M-%S')
