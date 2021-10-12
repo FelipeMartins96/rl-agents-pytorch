@@ -2,7 +2,6 @@ import torch
 import numpy as np
 import PIL
 import os
-import wandb
 
 def generate_gif(
     env, 
@@ -76,9 +75,5 @@ def generate_gif(
         duration=duration, 
         loop=0
     )
-
-    wandb.init(project='tg-juliana', name=hp.EXP_NAME,  entity='robocin', config=hp.to_dict())
-
-    wandb.log({"video": wandb.Video(filepathz, fps=4, format="gif")})
 
     return info
