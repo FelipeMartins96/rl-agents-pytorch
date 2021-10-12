@@ -54,8 +54,8 @@ if __name__ == "__main__":
         NOISE_SIGMA_GRAD_STEPS=3000,
         REPLAY_SIZE=5000000,
         REPLAY_INITIAL=100000,
-        SAVE_FREQUENCY=100000,
-        GIF_FREQUENCY=25000,
+        SAVE_FREQUENCY=25000,
+        GIF_FREQUENCY=50000,
         TOTAL_GRAD_STEPS=1000000
     )
     wandb.init(project='larc_2021', name=hp.EXP_NAME,  entity='robocin', config=hp.to_dict())
