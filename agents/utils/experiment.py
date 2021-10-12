@@ -43,7 +43,7 @@ class HyperParameters:
             self.N_AGENTS = env.action_space.shape[0]
             self.N_ACTS = env.action_space.shape[1]
             self.N_OBS = env.observation_space.shape[1]
-        self.SAVE_PATH = os.path.join("/content/drive/MyDrive/RL",
+        self.SAVE_PATH = os.path.join("/content/drive/Shareddrives/RL",
             "saves", self.ENV_NAME, self.AGENT, self.EXP_NAME)
         self.CHECKPOINT_PATH = os.path.join(self.SAVE_PATH, "checkpoints")
         self.GIF_PATH = os.path.join(self.SAVE_PATH, "gifs")

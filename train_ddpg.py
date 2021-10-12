@@ -53,7 +53,7 @@ if __name__ == "__main__":
         REPLAY_SIZE=200000, # memoria , buffer 
         REPLAY_INITIAL=5000, # depois de n tempo começa a treinar
         SAVE_FREQUENCY=20000, # a cada quantos passos ele vai salvar os checkpoints
-        GIF_FREQUENCY=10000, # depois de n passos cria um gif.
+        GIF_FREQUENCY=100000, # depois de n passos cria um gif.
         TOTAL_GRAD_STEPS=5000000
     )
     wandb.init(project='tg-juliana', name=hp.EXP_NAME,  entity='robocin', config=hp.to_dict())
