@@ -6,7 +6,7 @@ import copy
 import numpy as np
 import random
 import itertools
-from agents.utils import NStepTracer, OrnsteinUhlenbeckNoise, generate_gif_3v3, HyperParameters, ExperienceFirstLast
+from agents.utils import NStepTracer, OrnsteinUhlenbeckNoise, generate_gif_atk_vs_gk, HyperParameters, ExperienceFirstLast
 from rsoccer_gym.Utils.Utils import OrnsteinUhlenbeckAction
 import os
 from dataclasses import dataclass
@@ -61,7 +61,7 @@ def data_func(
             if gif_idx != -1:
                 pi_aux = copy.deepcopy(pi)
                 path = os.path.join(hp.GIF_PATH, f"{gif_idx:09d}.gif")
-                generate_gif_3v3(env=env, filepath=path,
+                generate_gif_atk_vs_gk(env=env, filepath=path,
                              pi=[pi_aux, pi_gk], hp=hp)
 
             done = False

@@ -13,7 +13,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 import wandb
-from agents.ddpg_3v3 import (DDPGHP, DDPGActor, DDPGCritic, TargetActor,
+from agents.ddpg_atk_vs_gk import (DDPGHP, DDPGActor, DDPGCritic, TargetActor,
                          TargetCritic, data_func)
 from agents.utils import ReplayBuffer, save_checkpoint, unpack_batch, ExperienceFirstLast
 import pyvirtualdisplay
