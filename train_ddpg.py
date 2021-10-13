@@ -41,8 +41,8 @@ if __name__ == "__main__":
         EXP_NAME=args.name,
         DEVICE=device,
         ENV_NAME=args.env,
-        N_ROLLOUT_PROCESSES=3,
-        LEARNING_RATE=0.0001,
+        N_ROLLOUT_PROCESSES=5,
+        LEARNING_RATE=0.001,
         EXP_GRAD_RATIO=10,
         BATCH_SIZE=256,
         GAMMA=0.95,
@@ -56,7 +56,7 @@ if __name__ == "__main__":
         REPLAY_INITIAL=100000,
         SAVE_FREQUENCY=25000,
         GIF_FREQUENCY=50000,
-        TOTAL_GRAD_STEPS=1000000
+        TOTAL_GRAD_STEPS=2000000
     )
     wandb.init(project='larc_2021', name=hp.EXP_NAME,  entity='robocin', config=hp.to_dict())
     current_time = datetime.datetime.now().strftime('%b-%d_%H-%M-%S')
