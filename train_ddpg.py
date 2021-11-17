@@ -18,11 +18,11 @@ import wandb
 from agents.ddpg import (DDPGHP, DDPGActor, DDPGCritic, TargetActor,
                          TargetCritic, data_func)
 from agents.utils import ReplayBuffer, save_checkpoint, unpack_batch, ExperienceFirstLast
-import pyvirtualdisplay
+# import pyvirtualdisplay
 
 if __name__ == "__main__":
     # Creates a virtual display for OpenAI gym
-    pyvirtualdisplay.Display(visible=0, size=(1400, 900)).start()
+    # pyvirtualdisplay.Display(visible=0, size=(1400, 900)).start()
 
     mp.set_start_method('spawn')
     os.environ['OMP_NUM_THREADS'] = "1"
@@ -41,24 +41,24 @@ if __name__ == "__main__":
         EXP_NAME=args.name,
         DEVICE=device,
         ENV_NAME=args.env,
-        N_ROLLOUT_PROCESSES=5,
+        N_ROLLOUT_PROCESSES=1,
         LEARNING_RATE=0.001,
-        EXP_GRAD_RATIO=10,
+        EXP_GRAD_RATIO=5,
         BATCH_SIZE=256,
         GAMMA=0.95,
-        REWARD_STEPS=3,
-        NOISE_SIGMA_INITIAL=0.8,
+        REWARD_STEPS=1,
+        NOISE_SIGMA_INITIAL=0.4,
         NOISE_THETA=0.15,
         NOISE_SIGMA_DECAY=0.99,
-        NOISE_SIGMA_MIN=0.15,
-        NOISE_SIGMA_GRAD_STEPS=3000,
+        NOISE_SIGMA_MIN=0.4,
+        NOISE_SIGMA_GRAD_STEPS=30000000,
         REPLAY_SIZE=5000000,
         REPLAY_INITIAL=100000,
         SAVE_FREQUENCY=25000,
-        GIF_FREQUENCY=50000,
-        TOTAL_GRAD_STEPS=2000000
+        GIF_FREQUENCY=5000000,
+        TOTAL_GRAD_STEPS=300000
     )
-    wandb.init(project='larc_2021', name=hp.EXP_NAME,  entity='robocin', config=hp.to_dict())
+    wandb.init(project='jax_agents-rsoccer', name=hp.EXP_NAME,  entity='felipemartins', config=hp.to_dict())
     current_time = datetime.datetime.now().strftime('%b-%d_%H-%M-%S')
     tb_path = os.path.join('runs', current_time + '_'
                            + hp.ENV_NAME + '_' + hp.EXP_NAME)
@@ -105,10 +105,12 @@ if __name__ == "__main__":
     best_reward = None
     last_gif = None
     wandb_gif_queue = deque()
+    global_steps = -1
     try:
         with tqdm(total=hp.TOTAL_GRAD_STEPS, smoothing=0) as pbar:
             ep_infos = list()
             while n_grads < hp.TOTAL_GRAD_STEPS:
+                global_steps += 1
                 metrics = {}
                 st_time = time.perf_counter()
                 # Collect EXP_GRAD_RATIO sample for each grad step
@@ -188,6 +190,7 @@ if __name__ == "__main__":
                     metrics['counters/grads'] = n_grads
                     metrics['counters/episodes'] = n_episodes
                     metrics["counters/buffer_len"] = buffer.size()
+                    metrics["global_steps"] = global_steps
 
                     if ep_infos:
                         for key in ep_infos[0].keys():
