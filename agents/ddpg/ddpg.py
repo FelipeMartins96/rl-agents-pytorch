@@ -26,9 +26,10 @@ def data_func(
     finish_event_m,
     sigma_m,
     gif_req_m,
-    hp
+    hp,
+    i
 ):
-    env = gym.make(hp.ENV_NAME)
+    env = gym.make(hp.ENV_NAME, fira_port=10010 + i)
     if hp.MULTI_AGENT:
         tracer = [NStepTracer(n=hp.REWARD_STEPS, gamma=hp.GAMMA)]*hp.N_AGENTS
     else:

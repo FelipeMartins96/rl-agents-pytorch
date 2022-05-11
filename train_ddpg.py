@@ -31,8 +31,8 @@ if __name__ == "__main__":
                         action="store_true", help="Enable cuda")
     parser.add_argument("-n", "--name", required=True,
                         help="Name of the run")
-    parser.add_argument("-e", "--env", required=True,
-                        help="Name of the gym environment")
+    # parser.add_argument("-e", "--env", required=True,
+    #                     help="Name of the gym environment")
     args = parser.parse_args()
     device = "cuda" if args.cuda else "cpu"
 
@@ -40,8 +40,8 @@ if __name__ == "__main__":
     hp = DDPGHP(
         EXP_NAME=args.name,
         DEVICE=device,
-        ENV_NAME=args.env,
-        N_ROLLOUT_PROCESSES=1,
+        ENV_NAME='VSSFIRA-v0',
+        N_ROLLOUT_PROCESSES=2,
         LEARNING_RATE=0.001,
         EXP_GRAD_RATIO=5,
         BATCH_SIZE=256,
@@ -58,7 +58,7 @@ if __name__ == "__main__":
         GIF_FREQUENCY=5000000,
         TOTAL_GRAD_STEPS=300000
     )
-    wandb.init(project='jax_agents-rsoccer', name=hp.EXP_NAME,  entity='felipemartins', config=hp.to_dict())
+    wandb.init(project='cbrfs', name=hp.EXP_NAME,  entity='breno-cavalcanti', config=hp.to_dict())
     current_time = datetime.datetime.now().strftime('%b-%d_%H-%M-%S')
     tb_path = os.path.join('runs', current_time + '_'
                            + hp.ENV_NAME + '_' + hp.EXP_NAME)
@@ -73,7 +73,7 @@ if __name__ == "__main__":
     sigma_m = mp.Value('f', hp.NOISE_SIGMA_INITIAL)
     gif_req_m = mp.Value('i', -1)
     data_proc_list = []
-    for _ in range(hp.N_ROLLOUT_PROCESSES):
+    for i in range(hp.N_ROLLOUT_PROCESSES):
         data_proc = mp.Process(
             target=data_func,
             args=(
@@ -83,7 +83,8 @@ if __name__ == "__main__":
                 finish_event,
                 sigma_m,
                 gif_req_m,
-                hp
+                hp,
+                i
             )
         )
         data_proc.start()
