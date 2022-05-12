@@ -8,40 +8,51 @@ class DDPGActor(nn.Module):
         super(DDPGActor, self).__init__()
 
         self.net = nn.Sequential(
-            nn.Linear(obs_size, 400),
+            nn.Linear(obs_size, 256),
             nn.ReLU(),
-            nn.Linear(400, 300),
+            nn.Linear(256, 256),
             nn.ReLU(),
-            nn.Linear(300, act_size),
-            nn.Tanh()
+            nn.Linear(256, 512),
+            nn.ReLU(),
+            nn.Linear(512, 512),
+            nn.ReLU(),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Linear(256, act_size),
+            nn.Tanh(),
         )
 
     def forward(self, x):
         return self.net(x)
-    
+
     def get_action(self, x):
         return self.net(x).detach().cpu().numpy()
 
 
 class DDPGCritic(nn.Module):
-    def __init__(self, obs_size, act_size):
+    def __init__(self, obs_size, act_size, n_out=1):
         super(DDPGCritic, self).__init__()
 
         self.obs_net = nn.Sequential(
-            nn.Linear(obs_size, 400),
+            nn.Linear(obs_size, 512),
+            nn.ReLU(),
+            nn.Linear(512, 512),
+            nn.ReLU(),
+            nn.Linear(512, 1024),
             nn.ReLU(),
         )
 
         self.out_net = nn.Sequential(
-            nn.Linear(400 + act_size, 300),
+            nn.Linear(1024 + act_size, 512),
             nn.ReLU(),
-            nn.Linear(300, 1)
+            nn.Linear(512, 512),
+            nn.ReLU(),
+            nn.Linear(512, n_out),
         )
 
     def forward(self, x, a):
         obs = self.obs_net(x)
         return self.out_net(torch.cat([obs, a], dim=1))
-
 
 class TargetNet:
     """

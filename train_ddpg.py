@@ -41,24 +41,24 @@ if __name__ == "__main__":
         EXP_NAME=args.name,
         DEVICE=device,
         ENV_NAME='VSSFIRA-v0',
-        N_ROLLOUT_PROCESSES=2,
+        N_ROLLOUT_PROCESSES=5,
         LEARNING_RATE=0.001,
-        EXP_GRAD_RATIO=5,
-        BATCH_SIZE=256,
+        EXP_GRAD_RATIO=10,
+        BATCH_SIZE=128,
         GAMMA=0.95,
         REWARD_STEPS=1,
         NOISE_SIGMA_INITIAL=0.4,
         NOISE_THETA=0.15,
         NOISE_SIGMA_DECAY=0.99,
-        NOISE_SIGMA_MIN=0.4,
+        NOISE_SIGMA_MIN=0.3,
         NOISE_SIGMA_GRAD_STEPS=30000000,
         REPLAY_SIZE=5000000,
         REPLAY_INITIAL=100000,
         SAVE_FREQUENCY=25000,
-        GIF_FREQUENCY=5000000,
-        TOTAL_GRAD_STEPS=300000
+        GIF_FREQUENCY=1000000,
+        TOTAL_GRAD_STEPS=5000000
     )
-    wandb.init(project='cbrfs', name=hp.EXP_NAME,  entity='breno-cavalcanti', config=hp.to_dict())
+    wandb.init(project='cbrfs', name=hp.EXP_NAME,  entity='robocin', config=hp.to_dict())
     current_time = datetime.datetime.now().strftime('%b-%d_%H-%M-%S')
     tb_path = os.path.join('runs', current_time + '_'
                            + hp.ENV_NAME + '_' + hp.EXP_NAME)
