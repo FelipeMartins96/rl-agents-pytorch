@@ -16,11 +16,11 @@ import wandb
 from agents.ddpg import (DDPGHP, DDPGActor, DDPGCritic, TargetActor,
                          TargetCritic, data_func)
 from agents.utils import ReplayBuffer, save_checkpoint, unpack_batch, ExperienceFirstLast
-import pyvirtualdisplay
+# import pyvirtualdisplay
 
 if __name__ == "__main__":
     # Creates a virtual display for OpenAI gym
-    pyvirtualdisplay.Display(visible=0, size=(1400, 900)).start()
+    # pyvirtualdisplay.Display(visible=0, size=(1400, 900)).start()
 
     mp.set_start_method('spawn')
     os.environ['OMP_NUM_THREADS'] = "1"
@@ -39,7 +39,7 @@ if __name__ == "__main__":
         EXP_NAME=args.name,
         DEVICE=device,
         ENV_NAME=args.env,
-        N_ROLLOUT_PROCESSES=2,
+        N_ROLLOUT_PROCESSES=10,
         LEARNING_RATE=0.0001,
         EXP_GRAD_RATIO=10,
         BATCH_SIZE=256,
@@ -54,9 +54,9 @@ if __name__ == "__main__":
         REPLAY_INITIAL=100000,
         SAVE_FREQUENCY=100000,
         GIF_FREQUENCY=100000,
-        TOTAL_GRAD_STEPS=2000000
+        TOTAL_GRAD_STEPS=10000000
     )
-    wandb.init(project='RoboCIn-RL', name=hp.EXP_NAME,  entity='robocin', config=hp.to_dict())
+    wandb.init(project='msc-rsoccer', name=hp.EXP_NAME, config=hp.to_dict())
     current_time = datetime.datetime.now().strftime('%b-%d_%H-%M-%S')
     tb_path = os.path.join('runs', current_time + '_'
                            + hp.ENV_NAME + '_' + hp.EXP_NAME)

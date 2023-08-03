@@ -16,8 +16,11 @@ import wandb
 from agents.ddpg import (DDPGHP, DDPGActor, DDPGCritic, TargetActor,
                          TargetCritic, data_func)
 from agents.utils import ReplayBuffer, save_checkpoint, unpack_batch, ExperienceFirstLast
+# import pyvirtualdisplay
 
 if __name__ == "__main__":
+    # pyvirtualdisplay.Display(visible=0, size=(1400, 900)).start()
+
     mp.set_start_method('spawn')
     os.environ['OMP_NUM_THREADS'] = "1"
     parser = argparse.ArgumentParser()
@@ -35,7 +38,7 @@ if __name__ == "__main__":
         EXP_NAME=args.name,
         DEVICE=device,
         ENV_NAME=args.env,
-        N_ROLLOUT_PROCESSES=3,
+        N_ROLLOUT_PROCESSES=10,
         LEARNING_RATE=0.0001,
         EXP_GRAD_RATIO=10,
         BATCH_SIZE=256,
@@ -46,14 +49,14 @@ if __name__ == "__main__":
         NOISE_SIGMA_DECAY=0.99,
         NOISE_SIGMA_MIN=0.15,
         NOISE_SIGMA_GRAD_STEPS=3000,
-        REPLAY_SIZE=1000000,
+        REPLAY_SIZE=5000000,
         REPLAY_INITIAL=100000,
         SAVE_FREQUENCY=100000,
-        GIF_FREQUENCY=10000,
-        TOTAL_GRAD_STEPS=2000000,
+        GIF_FREQUENCY=100000,
+        TOTAL_GRAD_STEPS=10000000,
         MULTI_AGENT=True
     )
-    wandb.init(project='RoboCIn-RL', name=hp.EXP_NAME, config=hp.to_dict())
+    wandb.init(project='msc-rsoccer', name=hp.EXP_NAME, config=hp.to_dict())
     current_time = datetime.datetime.now().strftime('%b-%d_%H-%M-%S')
     tb_path = os.path.join('runs', current_time + '_'
                            + hp.ENV_NAME + '_' + hp.EXP_NAME)

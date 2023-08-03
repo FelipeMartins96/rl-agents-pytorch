@@ -52,8 +52,12 @@ class HyperParameters:
         self.action_space = env.action_space
         self.observation_space = env.observation_space
         if self.MULTI_AGENT:
-            self.action_space.shape = (env.action_space.shape[1], )
-            self.observation_space.shape = (env.observation_space.shape[1], )
+            self.action_space = gym.spaces.Box(low=-1, high=1,
+                                           shape=(self.action_space.shape[1], ), dtype=self.action_space.dtype)
+            self.observation_space = gym.spaces.Box(low=-env.NORM_BOUNDS, high=env.NORM_BOUNDS,
+                                           shape=(self.observation_space.shape[1], ), dtype=self.observation_space.dtype)
+            # self.action_space.shape = (env.action_space.shape[1], )
+            # self.observation_space.shape = (env.observation_space.shape[1], )
 
 
 def unpack_batch(
