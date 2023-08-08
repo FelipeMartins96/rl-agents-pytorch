@@ -31,6 +31,7 @@ class HyperParameters:
     DEVICE: str = None
     TOTAL_GRAD_STEPS: int = None
     MULTI_AGENT: bool = False
+    MADDPG: bool = False
 
     def to_dict(self):
         return self.__dict__

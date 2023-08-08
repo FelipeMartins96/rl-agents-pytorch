@@ -83,7 +83,28 @@ def data_func(
                     ep_rw += r
 
                 # Trace NStep rewards and add to mp queue
-                if hp.MULTI_AGENT: 
+                if hp.MADDPG:
+                    exp = list()
+                    exp.append(ExperienceFirstLast(
+                        state=np.array([s[0], s[1], s[2]]),
+                        action=np.array([a[0], a[1], a[2]]),
+                        reward=r['robot_0'],
+                        last_state=np.array([s_next[0], s_next[1], s_next[2]])
+                    ))
+                    exp.append(ExperienceFirstLast(
+                        state=np.array([s[1], s[0], s[2]]),
+                        action=np.array([a[1], a[0], a[2]]),
+                        reward=r['robot_1'],
+                        last_state=np.array([s_next[1], s_next[0], s_next[2]])
+                    ))
+                    exp.append(ExperienceFirstLast(
+                        state=np.array([s[2], s[0], s[1]]),
+                        action=np.array([a[2], a[0], a[1]]),
+                        reward=r['robot_2'],
+                        last_state=np.array([s_next[2], s_next[0], s_next[1]])
+                    ))
+                    queue_m.put(exp)
+                elif hp.MULTI_AGENT: 
                     exp = list()
                     for i in range(hp.N_AGENTS):
                         kwargs = {
