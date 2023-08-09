@@ -4,7 +4,7 @@ import gym
 import rsoccer_gym
 import torch
 import os
-
+import datetime
 import wandb
 
 
@@ -45,7 +45,7 @@ class HyperParameters:
             self.N_ACTS = env.action_space.shape[1]
             self.N_OBS = env.observation_space.shape[1]
         self.SAVE_PATH = os.path.join(
-            "saves", self.ENV_NAME, self.AGENT, self.EXP_NAME)
+            "saves", self.ENV_NAME, self.EXP_NAME, datetime.datetime.now().strftime('%b-%d_%H-%M-%S'))
         self.CHECKPOINT_PATH = os.path.join(self.SAVE_PATH, "checkpoints")
         self.GIF_PATH = os.path.join(self.SAVE_PATH, "gifs")
         os.makedirs(self.CHECKPOINT_PATH, exist_ok=True)
