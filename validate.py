@@ -103,22 +103,44 @@ class TeamZero:
 env = gym.make('VSSTNMT-v0')
 
 BLUE_TEAMS = {
-    'sa': TeamSA('sa.pth'),
-    'rsa': TeamIC('sa.pth'),
-    'il': TeamIC('il-ddpg.pth'),
-    'jal': TeamCC('jal.pth'),
+    'sa-0': TeamSA('nets/sa-0.pth'),
+    'rsa-0': TeamIC('nets/sa-0.pth'),
+    'il-ddpg-0': TeamIC('nets/il-ddpg-0.pth'),
+    'il-maddpg-0': TeamIC('nets/il-maddpg-0.pth'),
+    'jal-0': TeamCC('nets/jal-0.pth'),
+    'sa-1': TeamSA('nets/sa-1.pth'),
+    'rsa-1': TeamIC('nets/sa-1.pth'),
+    'il-ddpg-1': TeamIC('nets/il-ddpg-1.pth'),
+    'il-maddpg-1': TeamIC('nets/il-maddpg-1.pth'),
+    'jal-1': TeamCC('nets/jal-1.pth'),
+    'sa-2': TeamSA('nets/sa-2.pth'),
+    'rsa-2': TeamIC('nets/sa-2.pth'),
+    'il-ddpg-2': TeamIC('nets/il-ddpg-2.pth'),
+    'il-maddpg-2': TeamIC('nets/il-maddpg-2.pth'),
+    'jal-2': TeamCC('nets/jal-2.pth'),
 }
 
 YELLOW_TEAMS = {
-    'sa': TeamSA('sa.pth'),
-    'rsa': TeamIC('sa.pth'),
-    'il': TeamIC('il-ddpg.pth'),
-    'jal': TeamCC('jal.pth'),
+    'sa-0': TeamSA('nets/sa-0.pth'),
+    'rsa-0': TeamIC('nets/sa-0.pth'),
+    'il-ddpg-0': TeamIC('nets/il-ddpg-0.pth'),
+    'il-maddpg-0': TeamIC('nets/il-maddpg-0.pth'),
+    'jal-0': TeamCC('nets/jal-0.pth'),
+    'sa-1': TeamSA('nets/sa-1.pth'),
+    'rsa-1': TeamIC('nets/sa-1.pth'),
+    'il-ddpg-1': TeamIC('nets/il-ddpg-1.pth'),
+    'il-maddpg-1': TeamIC('nets/il-maddpg-1.pth'),
+    'jal-1': TeamCC('nets/jal-1.pth'),
+    'sa-2': TeamSA('nets/sa-2.pth'),
+    'rsa-2': TeamIC('nets/sa-2.pth'),
+    'il-ddpg-2': TeamIC('nets/il-ddpg-2.pth'),
+    'il-maddpg-2': TeamIC('nets/il-maddpg-2.pth'),
+    'jal-2': TeamCC('nets/jal-2.pth'),
     'ou': TeamOU(),
     'zero': TeamZero(),
 }
 
-N_MATCHES = 1000
+N_MATCHES = 500
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
