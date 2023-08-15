@@ -126,22 +126,25 @@ YELLOW_TEAMS = [
         'sa-0': TeamSA('nets/sa-0.pth'),
         'sa-1': TeamSA('nets/sa-1.pth'),
         'sa-2': TeamSA('nets/sa-2.pth'),
+    },{
         'rsa-0': TeamIC('nets/sa-0.pth'),
         'rsa-1': TeamIC('nets/sa-1.pth'),
-        'rsa-2': TeamIC('nets/sa-2.pth')
+        'rsa-2': TeamIC('nets/sa-2.pth'),
     },{
         'il-ddpg-0': TeamIC('nets/il-ddpg-0.pth'),
         'il-ddpg-1': TeamIC('nets/il-ddpg-1.pth'),
         'il-ddpg-2': TeamIC('nets/il-ddpg-2.pth'),
+    },{
         'il-maddpg-0': TeamIC('nets/il-maddpg-0.pth'),
         'il-maddpg-1': TeamIC('nets/il-maddpg-1.pth'),
-        'il-maddpg-2': TeamIC('nets/il-maddpg-2.pth')
+        'il-maddpg-2': TeamIC('nets/il-maddpg-2.pth'),
     },{
-    'jal-0': TeamCC('nets/jal-0.pth'),
-    'jal-1': TeamCC('nets/jal-1.pth'),
-    'jal-2': TeamCC('nets/jal-2.pth'),
-    'ou-99': TeamOU(),
-    'zero-99': TeamZero(),
+        'jal-0': TeamCC('nets/jal-0.pth'),
+        'jal-1': TeamCC('nets/jal-1.pth'),
+        'jal-2': TeamCC('nets/jal-2.pth'),
+    },{
+        'ou-99': TeamOU(),
+        'zero-99': TeamZero(),
     }
 ]
 
