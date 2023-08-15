@@ -43,7 +43,7 @@ if __name__ == "__main__":
         LEARNING_RATE=0.0001,
         EXP_GRAD_RATIO=10,
         BATCH_SIZE=256,
-        GAMMA=0.99,
+        GAMMA=0.95,
         REWARD_STEPS=3,
         NOISE_SIGMA_INITIAL=0.8,
         NOISE_THETA=0.15,

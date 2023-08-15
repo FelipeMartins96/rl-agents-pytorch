@@ -99,8 +99,6 @@ class TeamZero:
     def reset(self):
         pass
 
-# Using VSS Single Agent env
-env = gym.make('VSSTNMT-v0')
 
 BLUE_TEAMS = {
     'sa-0': TeamSA('nets/sa-0.pth'),
@@ -120,39 +118,47 @@ BLUE_TEAMS = {
     'jal-2': TeamCC('nets/jal-2.pth'),
 }
 
-YELLOW_TEAMS = {
-    'sa-0': TeamSA('nets/sa-0.pth'),
-    'rsa-0': TeamIC('nets/sa-0.pth'),
-    'il-ddpg-0': TeamIC('nets/il-ddpg-0.pth'),
-    'il-maddpg-0': TeamIC('nets/il-maddpg-0.pth'),
+YELLOW_TEAMS = [
+    {
+        'sa-0': TeamSA('nets/sa-0.pth'),
+        'sa-1': TeamSA('nets/sa-1.pth'),
+        'sa-2': TeamSA('nets/sa-2.pth'),
+        'rsa-0': TeamIC('nets/sa-0.pth'),
+        'rsa-1': TeamIC('nets/sa-1.pth'),
+        'rsa-2': TeamIC('nets/sa-2.pth')
+    },{
+        'il-ddpg-0': TeamIC('nets/il-ddpg-0.pth'),
+        'il-ddpg-1': TeamIC('nets/il-ddpg-1.pth'),
+        'il-ddpg-2': TeamIC('nets/il-ddpg-2.pth'),
+        'il-maddpg-0': TeamIC('nets/il-maddpg-0.pth'),
+        'il-maddpg-1': TeamIC('nets/il-maddpg-1.pth'),
+        'il-maddpg-2': TeamIC('nets/il-maddpg-2.pth')
+    },{
     'jal-0': TeamCC('nets/jal-0.pth'),
-    'sa-1': TeamSA('nets/sa-1.pth'),
-    'rsa-1': TeamIC('nets/sa-1.pth'),
-    'il-ddpg-1': TeamIC('nets/il-ddpg-1.pth'),
-    'il-maddpg-1': TeamIC('nets/il-maddpg-1.pth'),
     'jal-1': TeamCC('nets/jal-1.pth'),
-    'sa-2': TeamSA('nets/sa-2.pth'),
-    'rsa-2': TeamIC('nets/sa-2.pth'),
-    'il-ddpg-2': TeamIC('nets/il-ddpg-2.pth'),
-    'il-maddpg-2': TeamIC('nets/il-maddpg-2.pth'),
     'jal-2': TeamCC('nets/jal-2.pth'),
-    'ou': TeamOU(),
-    'zero': TeamZero(),
-}
+    'ou-99': TeamOU(),
+    'zero-99': TeamZero(),
+    }
+]
 
 N_MATCHES = 500
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-n", "--name", required=True, help="Name of the run")
+    parser.add_argument("-p", "--pool", required=True, help="pool")
     args = parser.parse_args()
 
+
+    # Using VSS Single Agent env
+    env = gym.make('VSSTNMT-v0')
     blue_name = args.name
     blue_team = BLUE_TEAMS[blue_name]
     # for blue_name, blue_team in BLUE_TEAMS.items():
     total_scores = []
     results = []
-    for yellow_name, yellow_team in YELLOW_TEAMS.items():
+    for yellow_name, yellow_team in YELLOW_TEAMS[int(args.pool)].items():
         scores = []
         for _ in range(N_MATCHES):
             obs = env.reset()
@@ -169,14 +175,8 @@ if __name__ == "__main__":
                     blue_team.reset()
                     obs = env.reset()
             scores.append(reward)
-        results.append(f'\n{blue_name} vs {yellow_name}')
-        results.append(f'Wins: {(np.array(scores) == 1).sum():04d}, Draws: {(np.array(scores) == 0).sum():04d}, Losses: {(np.array(scores) == -1).sum():04d},')
-        results.append(f'Score: mean {np.mean(scores):.4f} std {np.std(scores):.4f}')
+        results.append(f'{blue_name.split("-")[0]},{yellow_name.split("-")[0]},{blue_name.split("-")[1]},{yellow_name.split("-")[1]},{(np.array(scores) == 1).sum():04d},{(np.array(scores) == 0).sum():04d},{(np.array(scores) == -1).sum():04d}')
         total_scores += scores
-
-    results.append(f'\n{blue_name} vs All')
-    results.append(f'Wins: {(np.array(total_scores) == 1).sum():04d}, Draws: {(np.array(total_scores) == 0).sum():04d}, Losses: {(np.array(total_scores) == -1).sum():04d},')
-    results.append(f'Score: mean {np.mean(total_scores):.4f} std {np.std(total_scores):.4f}')
         
     for l in results:
         print(l)
