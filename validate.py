@@ -30,8 +30,9 @@ class OrnsteinUhlenbeckAction(object):
 
 class TeamSA:
     def __init__(self, path):
-        self.pi = DDPGActor(52, 2)
-        self.pi.load_state_dict(state_dict=torch.load(path)['pi_state_dict'])
+        state_dict = torch.load(path, map_location=torch.device('cpu'))
+        self.pi = DDPGActor(state_dict['N_OBS'], 2)
+        self.pi.load_state_dict(state_dict=state_dict['pi_state_dict'])
         self.ou_actions = []
         for i in range(2):
             self.ou_actions.append(OrnsteinUhlenbeckAction())
@@ -50,8 +51,9 @@ class TeamSA:
 
 class TeamIC:
     def __init__(self, path):
-        self.pi = DDPGActor(52, 2)
-        self.pi.load_state_dict(state_dict=torch.load(path)['pi_state_dict'])
+        state_dict = torch.load(path, map_location=torch.device('cpu'))
+        self.pi = DDPGActor(state_dict['N_OBS'], 2)
+        self.pi.load_state_dict(state_dict=state_dict['pi_state_dict'])
     
     def __call__(self, obs):
         return self.pi(torch.Tensor(obs)).detach().numpy()
@@ -61,8 +63,9 @@ class TeamIC:
 
 class TeamCC:
     def __init__(self, path):
-        self.pi = DDPGActor(52, 6)
-        self.pi.load_state_dict(state_dict=torch.load(path)['pi_state_dict'])
+        state_dict = torch.load(path, map_location=torch.device('cpu'))
+        self.pi = DDPGActor(state_dict['N_OBS'], 6)
+        self.pi.load_state_dict(state_dict=state_dict['pi_state_dict'])
     
     def __call__(self, obs):
         return self.pi(torch.Tensor(obs[0])).detach().numpy().reshape(3,2)
