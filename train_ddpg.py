@@ -52,8 +52,8 @@ if __name__ == "__main__":
         NOISE_SIGMA_GRAD_STEPS=3000,
         REPLAY_SIZE=5000000,
         REPLAY_INITIAL=100000,
-        SAVE_FREQUENCY=100000,
-        GIF_FREQUENCY=100000,
+        SAVE_FREQUENCY=1000000,
+        GIF_FREQUENCY=500000,
         TOTAL_GRAD_STEPS=10000000
     )
     wandb.init(project='msc-rsoccer-52obs', name=hp.EXP_NAME, config=hp.to_dict())
