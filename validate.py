@@ -183,6 +183,7 @@ if __name__ == "__main__":
             scores.append(reward)
         results.append(f'{blue_name.split("-")[0]},{yellow_name.split("-")[0]},{blue_name.split("-")[1]},{yellow_name.split("-")[1]},{(np.array(scores) == 1).sum():04d},{(np.array(scores) == 0).sum():04d},{(np.array(scores) == -1).sum():04d}')
         total_scores += scores
-        
+    
+    print('#start-results#')
     for l in results:
         print(l)
