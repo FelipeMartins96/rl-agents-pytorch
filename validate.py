@@ -30,7 +30,7 @@ class OrnsteinUhlenbeckAction(object):
 
 class TeamSA:
     def __init__(self, path):
-        self.pi = DDPGActor(40, 2)
+        self.pi = DDPGActor(52, 2)
         self.pi.load_state_dict(state_dict=torch.load(path)['pi_state_dict'])
         self.ou_actions = []
         for i in range(2):
@@ -50,7 +50,7 @@ class TeamSA:
 
 class TeamIC:
     def __init__(self, path):
-        self.pi = DDPGActor(40, 2)
+        self.pi = DDPGActor(52, 2)
         self.pi.load_state_dict(state_dict=torch.load(path)['pi_state_dict'])
     
     def __call__(self, obs):
@@ -61,7 +61,7 @@ class TeamIC:
 
 class TeamCC:
     def __init__(self, path):
-        self.pi = DDPGActor(40, 6)
+        self.pi = DDPGActor(52, 6)
         self.pi.load_state_dict(state_dict=torch.load(path)['pi_state_dict'])
     
     def __call__(self, obs):
