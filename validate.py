@@ -166,9 +166,11 @@ if __name__ == "__main__":
     results = []
     for yellow_name, yellow_team in YELLOW_TEAMS[int(args.pool)].items():
         scores = []
+        steps = []
         for _ in range(N_MATCHES):
             obs = env.reset()
             done = False
+            step = 0
             while not done:
                 # Step using random actions
                 actions = np.zeros((6,2))
@@ -176,12 +178,14 @@ if __name__ == "__main__":
                 actions[3:] = yellow_team(obs[3:])
 
                 obs, reward, done, _ = env.step(actions)
+                step += 1
                 if done:
                     yellow_team.reset()
                     blue_team.reset()
                     obs = env.reset()
+            steps.append(step)
             scores.append(reward)
-        results.append(f'{blue_name.split("-")[0]},{yellow_name.split("-")[0]},{blue_name.split("-")[1]},{yellow_name.split("-")[1]},{(np.array(scores) == 1).sum():04d},{(np.array(scores) == 0).sum():04d},{(np.array(scores) == -1).sum():04d}')
+        results.append(f'{blue_name.split("-")[0]},{yellow_name.split("-")[0]},{blue_name.split("-")[1]},{yellow_name.split("-")[1]},{(np.array(scores) == 1).sum():04d},{(np.array(scores) == 0).sum():04d},{(np.array(scores) == -1).sum():04d},{np.mean(steps):.3f},{np.std(steps):.3f}')
         total_scores += scores
     
     print('#start-results#')
